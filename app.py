@@ -1,304 +1,185 @@
+"""
+AutoProducts — 앱 엔트리포인트 (동적 권한 라우터)
+로그인 여부, 결제 상태, 사용자 역할(도매상/소매상)에 따라
+사이드바 메뉴에 노출되는 페이지를 동적으로 제어합니다.
+"""
 import streamlit as st
-import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.drawing.image import Image as OpenpyxlImage
-import io
-import re
-import urllib.request
-import json
-from PIL import Image as PILImage, ImageOps
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 
-# 스트림릿 페이지 설정
-st.set_page_config(page_title="제품 관리 자동화", layout="wide")
+# ─────────────────────────────────────────
+# ★ 개발자 모드 (Bypass) 설정
+# ─────────────────────────────────────────
+DEV_MODE = False  # True 시 로그인/승인 우회 및 Mock 세션 가동
 
-st.title("제품 관리 엑셀 자동화")
-st.markdown("포스기에서 다운받은 엑셀 파일(raw)과 구글 드라이브 폴더 주소를 입력하면, 셀 내부에 이미지가 삽입된 엑셀을 생성합니다.")
+st.set_page_config(
+    page_title="AutoProducts (DEV)" if DEV_MODE else "AutoProducts",
+    page_icon="🏢",
+    layout="wide",
+)
 
-# 1. 파일 및 정보 입력 UI
-st.subheader("📋 1. 데이터 입력")
-uploaded_file = st.file_uploader("매장 포스기 제품 엑셀 파일을 업로드하세요. (XLSX, XLS, CSV 지원)", type=["csv", "xlsx", "xls"])
-folder_url = st.text_input("제품 사진이 업로드되어 있는 구글 드라이브 폴더 주소(URL)를 입력하세요.")
+from services.theme import apply_common_theme
+apply_common_theme()
 
-def extract_folder_id(url):
-    """구글 드라이브 URL에서 폴더 고유 ID를 추출하는 함수"""
-    match = re.search(r"folders/([a-zA-Z0-9-_]+)", url)
-    if match:
-        return match.group(1)
-    return url.strip()
+# ─────────────────────────────────────────
+# 페이지 모듈 임포트
+# ─────────────────────────────────────────
+from views import login as login_page
+from views import billing as billing_page
+from views import cue_sheet as cue_sheet_page
 
-def clean_and_parse_price(price_val):
-    """가격 데이터에서 쉼표나 문자를 제거하고 정수로 변환하는 함수"""
-    if pd.isna(price_val):
-        return 0
-    try:
-        price_str = re.sub(r'[^\d]', '', str(price_val))
-        return int(price_str) if price_str else 0
-    except:
-        return 0
+# 새로 분할된 백오피스 모듈들
+from views import product_registration
+from views import manage_products
+from views import manage_orders
+from views import manage_partners
+from views import analytics
+from views import retailer_orders
+from views import ai_chat
 
-def get_column_value_by_synonyms(row, df_columns, synonyms, default_val=""):
-    """매장별로 다른 포스기 열 이름을 동의어 풀을 순회하며 감지하는 함수"""
-    for synonym in synonyms:
-        matched_col = [col for col in df_columns if str(col).strip() == synonym]
-        if matched_col:
-            val = row[matched_col[0]]
-            return str(val).strip() if pd.notna(val) else default_val
-    return default_val
+from services.auth import AuthService
 
-def get_google_drive_file_list(folder_id):
-    """Google Apps Script 웹 앱을 통해 구글 드라이브 폴더 내 파일명과 ID 목록을 안정적으로 가져오는 함수"""
-    file_map = {}
-    try:
-        gas_url = f"https://script.google.com/macros/s/AKfycbwkKOJJeZX75jmWXP-gaXw__cyec6tXxKYQ8cxp8Ou5emWvXhN6KedCH0j3mkZPcl3L1w/exec?folderId={folder_id}"
-        req = urllib.request.Request(gas_url)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            for f_name, f_id in data.items():
-                # 확장자 제거 (예: product.jpg -> product)
-                clean_name = re.sub(r'\.[a-zA-Z0-9]+$', '', f_name)
-                # 포스기 품번 형태에 맞춰 .0 오차 제거 및 공백 제거
-                clean_key = re.sub(r'\.0$', '', clean_name.strip())
-                file_map[clean_key] = f_id
-    except:
-        pass
-    return file_map
+# ─────────────────────────────────────────
+# 개발자 모드 세션 초기화 (프리패스)
+# ─────────────────────────────────────────
+if DEV_MODE and "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = True
+    st.session_state["is_paid"] = True
+    st.session_state["role"] = "wholesaler"  # 기본 테스트 역할: 도매상
+    st.session_state["store_name"] = "동대문김사장 (Mock)"
+    st.session_state["email"] = "mock_wholesaler@example.com"
+    st.session_state["store_id"] = "mock-store-id-123"
+    st.session_state["drive_folder_url"] = "https://drive.google.com/drive/folders/mock-folder-id"
+    st.session_state["has_ai_agent"] = True  # AI 에이전트 결제 기본 적용
 
-def download_thumbnail_image(file_id):
-    """구글 드라이브 파일 ID를 이용해 썸네일 또는 원본 이미지를 다운로드하는 함수"""
-    if not file_id:
-        return None
-        
-    # 1차 시도: UC (다이렉트) 엔드포인트
-    uc_url = f"https://drive.google.com/uc?id={file_id}"
-    try:
-        req = urllib.request.Request(uc_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return response.read()
-    except:
-        pass
-        
-    # 2차 시도: 썸네일 엔드포인트
-    thumb_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w300"
-    try:
-        req = urllib.request.Request(thumb_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req, timeout=4) as response:
-            return response.read()
-    except:
-        return None
+# ─────────────────────────────────────────
+# 전역 세션 상태 초기화 (탭 전환 시 데이터 유실 방지)
+# ─────────────────────────────────────────
+if "my_cue_sheet" not in st.session_state:
+    st.session_state["my_cue_sheet"] = []
 
-# NameError 및 타겟 오차를 차단하고 스트리밍 채널로 고도화한 단일 스레드 타겟 함수
-def process_single_row_image(p_num, file_list_map, folder_id):
-    """5015.0 실수형 변환 오차를 정규식으로 완벽 분리 후 이미지 매칭 및 다운로드"""
-    if not p_num:
-        return "NONE"
-    
-    # 1단계: 판다스가 실수로 붙인 소수점 .0을 완벽히 도려내 정형화 (NameError 버그 완치)
-    clean_p_num = re.sub(r'\.0$', '', str(p_num).strip())
-    
-    # 2단계: 스캔된 파일 리스트에서 ID 획득 시도
-    file_id = file_list_map.get(clean_p_num)
-    
-    img_data = None
-    if file_id:
-        img_data = download_thumbnail_image(file_id)
-        
-    # 3단계: 파일 ID 스캔이 실패했거나 구글 웹 토큰이 막혔을 때 작동하는 '주소 스캔' 레이어
-    if not img_data:
-        img_extensions = ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']
-        for ext in img_extensions:
-            # uc?export가 아닌 보안 차단이 없는 썸네일 다이렉트 뷰어 구조를 조합하여 구글 서버를 우회 관통합니다.
-            fallback_url = f"https://drive.google.com/thumbnail?authuser=0&sz=w300&id={folder_id}&filename={clean_p_num}.{ext}"
-            try:
-                req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                with urllib.request.urlopen(req, timeout=2) as response:
-                    img_data = response.read()
-                    if img_data:
-                        break
-            except:
-                continue
-                
-    if img_data:
-        try:
-            pil_img = PILImage.open(io.BytesIO(img_data))
-            pil_img = ImageOps.exif_transpose(pil_img)  # EXIF 방향 메타데이터를 실제 픽셀에 물리적으로 적용
-            pil_img = pil_img.convert("RGB")
-            pil_img.thumbnail((90, 110))
-            
-            img_buffer = io.BytesIO()
-            pil_img.save(img_buffer, format="JPEG")
-            img_buffer.seek(0)
-            return img_buffer
-        except:
-            return "ERROR"
-            
-    return "NONE"
+logged_in = st.session_state.get("logged_in", False)
+is_paid = st.session_state.get("is_paid", False)
+user_role = st.session_state.get("role", "")
 
-# 2. 변환 프로세스 시작
-if st.button("파일 변환"):
-    if uploaded_file is not None and folder_url:
-        try:
-            folder_id = extract_folder_id(folder_url)
+# ─────────────────────────────────────────
+# 동적 라우팅 (Role-based Navigation)
+# ─────────────────────────────────────────
 
-            # 포스기 구형/신형 엑셀 파싱
-            if uploaded_file.name.endswith('.csv'):
-                df_raw = pd.read_csv(uploaded_file, encoding='utf-8')
-            elif uploaded_file.name.endswith('.xls'):
-                df_raw = pd.read_excel(uploaded_file, engine='xlrd')
-            else:
-                df_raw = pd.read_excel(uploaded_file)
-                
-            st.info("📊 구글 드라이브 폴더의 파일 보안 토큰 구조를 실시간 스캔하는 중입니다...")
-            
-            # 구글 폴더 내 파일명과 고유 ID 일괄 선행 추출
-            file_list_map = get_google_drive_file_list(folder_id)
-            
-            cols = df_raw.columns
-            synonyms_pool = {
-                "p_number": ['품번', '상품코드', '품목코드', '모델명'],
-                "item_name": ['상품명', '품목명', '물품명', '제품명'],
-                "color": ['색상', '컬러', '색상명'],
-                "size": ['상세사이즈', '사이즈', '규격'],
-                "mix_ratio": ['혼용률', '혼방률', '소재'],
-                "wholesale": ['도매가', '도매단가', '입고가', '공급가'],
-                "retail": ['소매가', '판매가', '소비자가', '매장판매가'],
-                "stock": ['재고정상', '재고', '현재고', '매장량', '수량']
-            }
+if not logged_in:
+    # ▸ 비로그인 상태: 오직 로그인/회원가입 화면만 렌더링
+    login_page.show()
 
-            parsed_rows_data = []
+elif user_role == "wholesaler" and not is_paid:
+    # ▸ 도매상 가입 완료 but 미결제: 입금 안내 화면만 렌더링
+    billing_page.show()
 
-            # 1차 데이터 파싱 및 정형화
-            for idx, row in df_raw.iterrows():
-                p_num_raw = get_column_value_by_synonyms(row, cols, synonyms_pool["p_number"])
-                p_num = re.sub(r'\.0$', '', str(p_num_raw).strip())
-                
-                name = get_column_value_by_synonyms(row, cols, synonyms_pool["item_name"])
-                col_val = get_column_value_by_synonyms(row, cols, synonyms_pool["color"])
-                sz_val = get_column_value_by_synonyms(row, cols, synonyms_pool["size"], default_val="F")
-                mix_val = get_column_value_by_synonyms(row, cols, synonyms_pool["mix_ratio"])
-                
-                wholesale_raw = get_column_value_by_synonyms(row, cols, synonyms_pool["wholesale"], default_val="0")
-                retail_raw = get_column_value_by_synonyms(row, cols, synonyms_pool["retail"], default_val="0")
-                
-                wholesale_num = clean_and_parse_price(wholesale_raw)
-                retail_num = clean_and_parse_price(retail_raw)
-                
-                wholesale_text = f"{wholesale_num:,}" if wholesale_num > 0 else "0"
-                retail_text = f"{retail_num:,}" if retail_num > 0 else "0"
-                
-                stk_val = get_column_value_by_synonyms(row, cols, synonyms_pool["stock"], default_val="0")
-                stk_val = re.sub(r'\.0$', '', stk_val)
-                
-                # P_CODE 연산 후 최종 값 주입 방식 유지
-                p_code_num1 = int(wholesale_num / 1000)
-                p_code_num2 = int(retail_num / 1000)
-                p_code_text = f"{p_code_num1}_{p_code_num2}"
-                
-                parsed_rows_data.append({
-                    "p_number": p_num, "item_name": name, "color": col_val, "size": sz_val,
-                    "mix_ratio": mix_val, "wholesale": wholesale_text, "retail": retail_text,
-                    "stock": stk_val, "p_code": p_code_text
-                })
+else:
+    # ▸ 인증 + 결제 완료 유저: 역할에 따른 탭 구성
+    auth = AuthService()
 
-            st.info(f"이미지 {len(parsed_rows_data)}개를 삽입합니다...")
-            
-            # 이미지 매칭 및 예외 백업을 종합적으로 처리하는 마스터 함수를 비동기 병렬 구조로 타겟팅 변경
-            image_results = []
-            with ThreadPoolExecutor(max_workers=24) as executor:
-                futures = [
-                    executor.submit(process_single_row_image, data["p_number"], file_list_map, folder_id) 
-                    for data in parsed_rows_data
-                ]
-                
-                progress_bar = st.progress(0)
-                for f_idx, future in enumerate(futures):
-                    image_results.append(future.result())
-                    progress_bar.progress((f_idx + 1) / len(futures))
+    # 사이드바에 유저 정보 표시
+    with st.sidebar:
+        st.markdown("---")
+        store_name = st.session_state.get("store_name", "")
+        email = st.session_state.get("email", "")
+        role_label = "🏢 도매상" if user_role == "wholesaler" else "🛒 소매상"
 
-            # openpyxl 워크북 마스터 렌더링 시작
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "방송제품목록"
+        st.markdown(f"**{role_label}**")
+        st.markdown(f"**{store_name or email}**")
+        st.caption(f"{email}")
 
-            headers = ["사진", "품번", "상품명", "색상", "상세사이즈", "혼용률", "도매가", "판매가", "재고", "P CODE"]
-            ws.append(headers)
-
-            for idx, data_row in enumerate(parsed_rows_data):
-                ws.append([
-                    "", data_row["p_number"], data_row["item_name"], data_row["color"],
-                    data_row["size"], data_row["mix_ratio"], data_row["wholesale"],
-                    data_row["retail"], data_row["stock"], data_row["p_code"]
-                ])
-                
-                current_row_idx = idx + 2
-                img_res = image_results[idx]
-                
-                if isinstance(img_res, io.BytesIO):
-                    try:
-                        xl_img = OpenpyxlImage(img_res)
-                        ws.add_image(xl_img, f"A{current_row_idx}")
-                    except:
-                        ws.cell(row=current_row_idx, column=1, value="이미지 오류")
+        if DEV_MODE:
+            st.markdown("---")
+            st.markdown("🛠️ **DEV MODE CONTROLLER**")
+            # 가상 역할 스위칭 라디오 버튼
+            dev_role = st.radio(
+                "테스트 역할 스위치",
+                ["🏢 도매상", "🛒 소매상"],
+                index=0 if user_role == "wholesaler" else 1,
+                key="dev_role_switcher_radio"
+            )
+            mapped_role = "wholesaler" if "도매상" in dev_role else "retailer"
+            if mapped_role != user_role:
+                st.session_state["role"] = mapped_role
+                if mapped_role == "wholesaler":
+                    st.session_state["store_name"] = "동대문김사장 (Mock)"
+                    st.session_state["email"] = "mock_wholesaler@example.com"
+                    st.session_state["is_paid"] = True
                 else:
-                    ws.cell(row=current_row_idx, column=1, value="사진 없음")
+                    st.session_state["store_name"] = "소매상나라 (Mock)"
+                    st.session_state["email"] = "mock_retailer@example.com"
+                    st.session_state["is_paid"] = False
+                st.rerun()
 
-            # --- 디자이너 무드 스타일링 공정 ---
-            font_main = Font(name="맑은 고딕", size=10)
-            font_header = Font(name="맑은 고딕", size=11, bold=True)
-            
-            fill_header = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-            align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        st.markdown("---")
+        if st.button("🚪 로그아웃", width="stretch"):
+            auth.sign_out()
+            st.rerun()
+        st.markdown("---")
 
-            thin_border = Border(
-                left=Side(style='thin', color='D3D3D3'),
-                right=Side(style='thin', color='D3D3D3'),
-                top=Side(style='thin', color='D3D3D3'),
-                bottom=Side(style='thin', color='D3D3D3')
-            )
+    if user_role == "wholesaler":
+        # ★ 도매상: 사이드바 라우터 메뉴 최적화 (B안: 헤딩 + 버튼 리스트)
+        if "current_page" not in st.session_state:
+            st.session_state["current_page"] = "상품 등록 센터"
 
-            ws.row_dimensions[1].height = 28
-            for cell in ws[1]:
-                cell.font = font_header
-                cell.fill = fill_header
-                cell.alignment = align_center
-                cell.border = thin_border
+        def change_page(page):
+            st.session_state["current_page"] = page
 
-            for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=10), start=2):
-                ws.row_dimensions[row_idx].height = 95
-                for col_idx, cell in enumerate(row, start=1):
-                    cell.font = font_main
-                    cell.border = thin_border
-                    cell.alignment = align_center
+        st.sidebar.markdown("### ■ 상품 파트")
+        if st.sidebar.button("📤 상품 등록 센터", width="stretch", type="primary" if st.session_state["current_page"] == "상품 등록 센터" else "secondary"):
+            change_page("상품 등록 센터")
+            st.rerun()
+        if st.sidebar.button("📦 등록 상품 관리", width="stretch", type="primary" if st.session_state["current_page"] == "등록 상품 관리" else "secondary"):
+            change_page("등록 상품 관리")
+            st.rerun()
 
-                    if col_idx in [3, 5, 6]:
-                        cell.alignment = align_left
+        st.sidebar.markdown("### ■ 매장 운영 파트")
+        if st.sidebar.button("📝 예약 및 주문 관리", width="stretch", type="primary" if st.session_state["current_page"] == "예약 및 주문 관리" else "secondary"):
+            change_page("예약 및 주문 관리")
+            st.rerun()
+        if st.sidebar.button("🤝 파트너 소매상 관리", width="stretch", type="primary" if st.session_state["current_page"] == "파트너 소매상 관리" else "secondary"):
+            change_page("파트너 소매상 관리")
+            st.rerun()
 
-            ws.column_dimensions['A'].width = 16
-            for col in ws.iter_cols(min_col=2, max_col=10):
-                max_len = max(len(str(cell.value or '')) for cell in col)
-                col_letter = col[0].column_letter
-                ws.column_dimensions[col_letter].width = max(max_len + 4, 13)
-            
-            excel_data = io.BytesIO()
-            wb.save(excel_data)
-            excel_data.seek(0)
+        st.sidebar.markdown("### ■ 분석 및 카탈로그")
+        if st.sidebar.button("📊 실시간 통계 & STR", width="stretch", type="primary" if st.session_state["current_page"] == "실시간 통계" else "secondary"):
+            change_page("실시간 통계")
+            st.rerun()
+        if st.sidebar.button("📱 내 카탈로그 미리보기", width="stretch", type="primary" if st.session_state["current_page"] == "카탈로그 미리보기" else "secondary"):
+            change_page("카탈로그 미리보기")
+            st.rerun()
 
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            final_file_name = f"{today_str}_방송제품목록.xlsx"
+        # 현재 페이지 렌더링
+        page = st.session_state["current_page"]
+        if page == "상품 등록 센터": product_registration.show()
+        elif page == "등록 상품 관리": manage_products.show()
+        elif page == "예약 및 주문 관리": manage_orders.show()
+        elif page == "파트너 소매상 관리": manage_partners.show()
+        elif page == "실시간 통계": analytics.show()
+        elif page == "카탈로그 미리보기": cue_sheet_page.show()
 
-            st.balloons()
-            st.subheader("🎉 2. 세팅 완료 및 다운로드")
-            st.download_button(
-                label="🟢 변환 완료 및 세팅된 엑셀 파일 다운로드",
-                data=excel_data,
-                file_name=final_file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    elif user_role == "retailer":
+        # ★ 소매상: 사이드바 라우터
+        if "retailer_page" not in st.session_state:
+            st.session_state["retailer_page"] = "전체 상품 카탈로그"
 
-        except Exception as e:
-            st.error(f"변환 중 에러가 발생했습니다. 에러 내용: {e}")
+        def change_r_page(page):
+            st.session_state["retailer_page"] = page
+
+        st.sidebar.markdown("### ■ 소매상 메뉴")
+        if st.sidebar.button("🛍️ 전체 상품 카탈로그", width="stretch", type="primary" if st.session_state["retailer_page"] == "전체 상품 카탈로그" else "secondary"):
+            change_r_page("전체 상품 카탈로그")
+            st.rerun()
+        if st.sidebar.button("📦 내 주문/예약 관리", width="stretch", type="primary" if st.session_state["retailer_page"] == "내 주문/예약 관리" else "secondary"):
+            change_r_page("내 주문/예약 관리")
+            st.rerun()
+        if st.sidebar.button("💬 AI 도매 매니저 상담", width="stretch", type="primary" if st.session_state["retailer_page"] == "AI 상담" else "secondary"):
+            change_r_page("AI 상담")
+            st.rerun()
+
+        page = st.session_state["retailer_page"]
+        if page == "전체 상품 카탈로그": cue_sheet_page.show()
+        elif page == "내 주문/예약 관리": retailer_orders.show()
+        elif page == "AI 상담": ai_chat.show()
     else:
-        st.warning("포스기 제품 엑셀 파일과 구글 드라이브 폴더 주소를 누락 없이 입력해 주세요.")
+        # 역할 미지정 예외 처리
+        st.error("계정 역할이 지정되지 않았습니다. 관리자에게 문의해 주세요.")

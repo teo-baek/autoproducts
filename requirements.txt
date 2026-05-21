@@ -3,3 +3,6 @@ pandas
 openpyxl
 Pillow
 xlrd
+supabase
+qrcode
+google-generativeai
