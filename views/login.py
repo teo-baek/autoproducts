@@ -8,7 +8,7 @@ from services.auth import AuthService
 
 def show():
     st.markdown('<div class="login-title">🏢 AutoProducts</div>', unsafe_allow_html=True)
-    st.markdown('<div class="login-subtitle">동대문 도매 시장 전용 B2B SaaS 플랫폼</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">도매 전용 B2B SaaS</div>', unsafe_allow_html=True)
 
     tab_login, tab_signup = st.tabs(["🔑 로그인", "📝 회원가입"])
 
