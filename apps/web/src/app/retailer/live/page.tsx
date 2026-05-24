@@ -2,25 +2,51 @@
 
 import { useState } from 'react';
 
-// 가상의 락(Lock) 걸린 방송용 재고 데이터
-const initialStock = [
-  { id: 1, name: '기모 오버핏 후드 (블랙)', allocated: 50, sold: 0 },
-  { id: 2, name: '카고 와이드 팬츠 (카키)', allocated: 30, sold: 0 },
-];
+import { supabase } from '@/lib/supabase';
+import { useEffect } from 'react';
 
 export default function LiveDashboardPage() {
-  const [stock, setStock] = useState(initialStock);
+  const [stock, setStock] = useState<any[]>([]);
   const [isLive, setIsLive] = useState(false);
 
-  const handleSell = (id: number) => {
+  useEffect(() => {
+    fetchLiveStock();
+  }, []);
+
+  const fetchLiveStock = async () => {
+    const { data, error } = await supabase
+      .from('product_skus')
+      .select('id, allocated_stock, sold_stock, products(name)')
+      .gt('allocated_stock', 0); // 할당된 가상 재고가 있는 상품만
+    
+    if (!error && data) {
+      setStock(data.map(item => ({
+        id: item.id,
+        name: item.products?.name || '상품',
+        allocated: item.allocated_stock,
+        sold: item.sold_stock
+      })));
+    }
+  };
+
+  const handleSell = async (id: number) => {
     if (!isLive) return alert('라이브 방송을 먼저 시작해주세요!');
 
+    // 옵티미스틱 UI 업데이트 (빠른 반응성)
     setStock(stock.map(item => {
       if (item.id === id && item.allocated > 0) {
         return { ...item, allocated: item.allocated - 1, sold: item.sold + 1 };
       }
       return item;
     }));
+
+    // 백엔드 RPC 호출 (Row-level Lock 적용된 함수)
+    const { error } = await supabase.rpc('decrement_stock', { sku_id: id });
+    if (error) {
+      console.error(error);
+      alert('재고 차감 중 오류가 발생했습니다.');
+      fetchLiveStock(); // 롤백
+    }
   };
 
   const handleSendPO = () => {
@@ -32,8 +58,7 @@ export default function LiveDashboardPage() {
     
     alert(`총 ${totalSold}건의 발주서(PO)가 도매상에게 전송되었습니다!`);
     
-    // 리셋
-    setStock(stock.map(item => ({ ...item, sold: 0 })));
+    // (실제 프로덕션에서는 orders 테이블에 INSERT)
     setIsLive(false);
   };
 

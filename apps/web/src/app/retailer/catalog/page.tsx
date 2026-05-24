@@ -1,20 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const MOCK_CATALOG = [
-  { id: 1, name: '기모 오버핏 후드', price: 35000, img: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=800&q=80' },
-  { id: 2, name: '카고 와이드 팬츠', price: 42000, img: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=800&q=80' },
-  { id: 3, name: '레더 크롭 자켓', price: 89000, img: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80' },
-  { id: 4, name: '플리츠 롱 스커트', price: 38000, img: 'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?auto=format&fit=crop&w=800&q=80' },
-  { id: 5, name: '니트 가디건', price: 54000, img: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?auto=format&fit=crop&w=800&q=80' },
-  { id: 6, name: '베이직 셔츠', price: 29000, img: 'https://images.unsplash.com/photo-1596755094514-f87e32f85e2c?auto=format&fit=crop&w=800&q=80' },
-];
+import { supabase } from '@/lib/supabase';
 
 export default function CatalogPage() {
+  const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticTag, setSemanticTag] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setProducts(data);
+    }
+  };
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.includes('따뜻') || searchQuery.includes('넉넉')) {
@@ -51,10 +59,15 @@ export default function CatalogPage() {
       {/* Grid Catalog (Progressive Disclosure) */}
       <main className="px-4 pb-24 max-w-[1600px] mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MOCK_CATALOG.map((item) => (
+          {products.length === 0 && (
+            <div className="col-span-1 md:col-span-3 text-center py-20 text-gray-500">
+              등록된 상품이 없습니다. 도매상 앱에서 상품을 등록해보세요.
+            </div>
+          )}
+          {products.map((item) => (
             <div key={item.id} className="group relative aspect-[3/4] overflow-hidden bg-zinc-900 cursor-pointer">
               <img 
-                src={item.img} 
+                src={item.main_image_url || 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=800&q=80'} 
                 alt={item.name} 
                 className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 opacity-80 group-hover:opacity-100"
               />

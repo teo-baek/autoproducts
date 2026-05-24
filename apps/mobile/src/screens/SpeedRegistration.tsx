@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
-
+import { supabase } from '../lib/supabase';
 type SlotIndex = 0 | 1 | 2 | 3;
 const SLOT_LABELS = ['정면', '후면', '디테일 1', '디테일 2'];
 
@@ -98,14 +98,42 @@ export default function SpeedRegistration() {
     `;
 
     try {
+      // 1. Supabase products 테이블 Insert
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .insert([{
+          p_number: skuCode,
+          name: `도매 신상품 (${skuCode})`,
+          price: numericPrice,
+          main_image_url: images.find(img => img !== null) || ''
+        }])
+        .select()
+        .single();
+
+      if (productError) throw productError;
+
+      // 2. Supabase product_skus 테이블 Insert (기본 가상 재고 50개 할당)
+      const { error: skuError } = await supabase
+        .from('product_skus')
+        .insert([{
+          product_id: productData.id,
+          color: 'Free',
+          size: 'Free',
+          allocated_stock: 50,
+        }]);
+
+      if (skuError) throw skuError;
+
+      // 3. 물리적 프린트
       await Print.printAsync({ html });
+      
       // 인쇄 완료 후 폼 초기화 (무한 루프)
       setImages([null, null, null, null]);
       setPrice('');
-      Alert.alert('저장 완료', '상품 등록 및 라벨 인쇄가 완료되었습니다.\n다음 상품을 등록해주세요.');
+      Alert.alert('저장 완료', 'DB 저장 및 라벨 인쇄가 완료되었습니다.\n다음 상품을 등록해주세요.');
     } catch (error) {
       console.error(error);
-      Alert.alert('인쇄 실패', '라벨 출력 중 오류가 발생했습니다.');
+      Alert.alert('저장 실패', 'DB 연동 또는 출력 중 오류가 발생했습니다.');
     }
   };
 
