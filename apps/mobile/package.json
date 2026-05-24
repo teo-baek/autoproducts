@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~56.0.4",
+    "expo-image-picker": "~56.0.13",
     "expo-print": "^56.0.3",
     "expo-sharing": "^56.0.13",
     "expo-status-bar": "~56.0.4",
