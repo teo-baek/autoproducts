@@ -3,42 +3,81 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert, Keyb
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 
+type SlotIndex = 0 | 1 | 2 | 3;
+const SLOT_LABELS = ['정면', '후면', '디테일 1', '디테일 2'];
+
 export default function SpeedRegistration() {
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [images, setImages] = useState<(string | null)[]>([null, null, null, null]);
   const [price, setPrice] = useState<string>('');
   const priceInputRef = useRef<TextInput>(null);
 
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.');
-      return;
+  const handleSlotPress = (index: SlotIndex) => {
+    Alert.alert(
+      `${SLOT_LABELS[index]} 사진 추가`,
+      '사진을 가져올 방식을 선택하세요.',
+      [
+        { text: '카메라 촬영', onPress: () => pickImage('camera', index) },
+        { text: '갤러리에서 선택', onPress: () => pickImage('gallery', index) },
+        { text: '취소', style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickImage = async (source: 'camera' | 'gallery', index: SlotIndex) => {
+    let result;
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.');
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-      // 사진 촬영 직후 단가 입력창으로 자동 포커스 이동 (컨베이어 벨트 UX)
-      setTimeout(() => {
-        priceInputRef.current?.focus();
-      }, 500);
+      const newImages = [...images];
+      newImages[index] = result.assets[0].uri;
+      setImages(newImages);
+      
+      // 첫 번째(정면) 사진을 등록했을 때 단가 입력창으로 포커스 이동 유도
+      if (index === 0) {
+        setTimeout(() => {
+          priceInputRef.current?.focus();
+        }, 500);
+      }
     }
   };
 
+  const clearSlot = (index: SlotIndex) => {
+    const newImages = [...images];
+    newImages[index] = null;
+    setImages(newImages);
+  };
+
   const saveAndPrint = async () => {
-    if (!imageUri || !price) {
-      Alert.alert('입력 누락', '사진과 단가를 모두 입력해주세요.');
+    const hasAnyImage = images.some(uri => uri !== null);
+    if (!hasAnyImage || !price) {
+      Alert.alert('입력 누락', '최소 1장의 사진과 단가를 입력해주세요.');
       return;
     }
 
     const numericPrice = parseInt(price.replace(/[^0-9]/g, ''), 10);
-    const skuCode = `SKU-${Date.now().toString().slice(-6)}`; // 임시 고유 바코드
+    const skuCode = `SKU-${Date.now().toString().slice(-6)}`;
 
-    // QR 인쇄용 HTML (감열지 프린터 최적화)
+    // QR 인쇄용 HTML
     const html = `
       <html>
         <head>
@@ -53,7 +92,6 @@ export default function SpeedRegistration() {
         <body>
           <div class="price">${numericPrice.toLocaleString()} 원</div>
           <div class="sku">${skuCode}</div>
-          <!-- 실제 환경에서는 여기에 QR 코드 이미지가 들어갑니다 -->
           <div class="qr-box">[QR CODE<br/>${skuCode}]</div>
         </body>
       </html>
@@ -61,10 +99,10 @@ export default function SpeedRegistration() {
 
     try {
       await Print.printAsync({ html });
-      // 인쇄 완료 후 폼 초기화 및 다음 촬영 준비 (무한 루프)
-      setImageUri(null);
+      // 인쇄 완료 후 폼 초기화 (무한 루프)
+      setImages([null, null, null, null]);
       setPrice('');
-      Alert.alert('저장 완료', '상품 등록 및 라벨 인쇄가 완료되었습니다.\n다음 상품을 촬영해주세요.');
+      Alert.alert('저장 완료', '상품 등록 및 라벨 인쇄가 완료되었습니다.\n다음 상품을 등록해주세요.');
     } catch (error) {
       console.error(error);
       Alert.alert('인쇄 실패', '라벨 출력 중 오류가 발생했습니다.');
@@ -78,24 +116,36 @@ export default function SpeedRegistration() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>⚡ 초고속 상품 등록</Text>
-          <Text style={styles.headerSubtitle}>사진 촬영 ➔ 단가 입력 ➔ QR 출력</Text>
+          <Text style={styles.headerTitle}>⚡ 다중 컷 상품 등록</Text>
+          <Text style={styles.headerSubtitle}>원하는 슬롯 터치 ➔ 단가 입력 ➔ QR 출력</Text>
         </View>
 
-        <View style={styles.cameraSection}>
-          {imageUri ? (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-              <TouchableOpacity style={styles.retakeButton} onPress={takePhoto}>
-                <Text style={styles.retakeText}>다시 촬영</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.cameraButton} onPress={takePhoto}>
-              <Text style={styles.cameraIcon}>📷</Text>
-              <Text style={styles.cameraButtonText}>상품 촬영 (터치)</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.carouselSection}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContainer}>
+            {images.map((uri, idx) => {
+              const index = idx as SlotIndex;
+              return (
+                <View key={index} style={styles.slotWrapper}>
+                  {uri ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <TouchableOpacity style={styles.clearButton} onPress={() => clearSlot(index)}>
+                        <Text style={styles.clearText}>삭제</Text>
+                      </TouchableOpacity>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{SLOT_LABELS[index]}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={styles.emptySlot} onPress={() => handleSlotPress(index)}>
+                      <Text style={styles.emptyIcon}>+</Text>
+                      <Text style={styles.emptyText}>{SLOT_LABELS[index]}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <View style={styles.formSection}>
@@ -113,9 +163,9 @@ export default function SpeedRegistration() {
         </View>
 
         <TouchableOpacity 
-          style={[styles.saveButton, (!imageUri || !price) && styles.saveButtonDisabled]} 
+          style={[styles.saveButton, (!images.some(u => u !== null) || !price) && styles.saveButtonDisabled]} 
           onPress={saveAndPrint}
-          disabled={!imageUri || !price}
+          disabled={!images.some(u => u !== null) || !price}
         >
           <Text style={styles.saveButtonText}>💾 저장 및 QR 프린트</Text>
         </TouchableOpacity>
@@ -148,13 +198,19 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
   },
-  cameraSection: {
-    alignItems: 'center',
+  carouselSection: {
     marginBottom: 30,
   },
-  cameraButton: {
-    width: 250,
-    height: 350,
+  carouselContainer: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+  },
+  slotWrapper: {
+    marginRight: 15,
+  },
+  emptySlot: {
+    width: 160,
+    height: 220,
     backgroundColor: '#f5f5f5',
     borderRadius: 16,
     borderWidth: 2,
@@ -163,37 +219,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cameraIcon: {
-    fontSize: 50,
+  emptyIcon: {
+    fontSize: 40,
+    color: '#aaa',
     marginBottom: 10,
   },
-  cameraButtonText: {
-    fontSize: 18,
+  emptyText: {
+    fontSize: 16,
     color: '#555',
     fontWeight: '600',
   },
   imagePreviewContainer: {
-    width: 250,
-    height: 350,
+    width: 160,
+    height: 220,
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   imagePreview: {
     width: '100%',
     height: '100%',
   },
-  retakeButton: {
+  clearButton: {
     position: 'absolute',
-    bottom: 15,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
-  retakeText: {
+  clearText: {
     color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  badge: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
   formSection: {
