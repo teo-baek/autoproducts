@@ -43,35 +43,38 @@ if get_q_param("view") == "qr":
     st.markdown(f"<h3 style='text-align: center; color: #666; margin-top: 0;'>품번: {p_num}</h3>", unsafe_allow_html=True)
     
     img_data = None
-    # 1. file_id가 있을 경우
+    
+    # 1. file_id가 있을 경우 (uc 원본 다운로드 폐기, 초고속 썸네일 엔진 단일 적용)
     if f_id:
         try:
-            req = urllib.request.Request(f"https://drive.google.com/uc?id={f_id}", headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=5) as response:
+            req = urllib.request.Request(f"https://drive.google.com/thumbnail?id={f_id}&sz=w600", headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=3) as response:
                 img_data = response.read()
         except:
-            try:
-                req = urllib.request.Request(f"https://drive.google.com/thumbnail?id={f_id}&sz=w600", headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=4) as response:
-                    img_data = response.read()
-            except:
-                pass
+            pass
                 
-    # 2. file_id가 없고 폴더 기반 우회 스캔이 필요한 경우
+    # 2. file_id가 없고 폴더 기반 우회 스캔이 필요한 경우 (동일하게 초고속 썸네일 엔진 적용)
     if not img_data and folder and p_num:
         for ext in ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']:
             fallback_url = f"https://drive.google.com/thumbnail?authuser=0&sz=w600&id={folder}&filename={p_num}.{ext}"
             try:
                 req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=3) as response:
+                with urllib.request.urlopen(req, timeout=2) as response:
                     img_data = response.read()
                     if img_data:
                         break
             except:
                 continue
 
+    # 3. 이미지 렌더링 및 서버 사이드 정면 고정 (PIL EXIF Transpose)
     if img_data:
-        st.image(img_data, use_container_width=True)
+        try:
+            pil_img = PILImage.open(io.BytesIO(img_data))
+            pil_img = ImageOps.exif_transpose(pil_img)
+            st.image(pil_img, use_container_width=True)
+        except Exception:
+            # 안전 장치: 처리 중 에러 발생 시 원본 썸네일 데이터로 출력
+            st.image(img_data, use_container_width=True)
     else:
         st.info("해당 제품의 이미지를 불러올 수 없습니다.")
         
