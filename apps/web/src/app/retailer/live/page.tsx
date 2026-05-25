@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { supabase } from '@/lib/supabase';
-import { useEffect } from 'react';
+import Header from '@/components/Header';
 
 export default function LiveDashboardPage() {
   const [stock, setStock] = useState<any[]>([]);
@@ -22,7 +22,7 @@ export default function LiveDashboardPage() {
     if (!error && data) {
       setStock(data.map(item => ({
         id: item.id,
-        name: item.products?.name || '상품',
+        name: (item.products as any)?.name || (Array.isArray(item.products) && (item.products as any)[0]?.name) || '상품',
         allocated: item.allocated_stock,
         sold: item.sold_stock
       })));
@@ -63,27 +63,28 @@ export default function LiveDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white p-8">
-      <header className="max-w-4xl mx-auto flex justify-between items-center mb-12">
-        <div>
-          <h1 className="text-4xl font-bold text-red-500 flex items-center gap-3">
-            <span className={isLive ? "animate-pulse" : ""}>🔴</span> 
-            LIVE SYNERGY
-          </h1>
-          <p className="text-gray-400 mt-2">라이브 셀러 실시간 재고 연동 대시보드</p>
-        </div>
-        
-        <button 
-          onClick={() => setIsLive(!isLive)}
-          className={`px-6 py-3 rounded-full font-bold text-lg transition-colors ${
-            isLive ? 'bg-red-600 text-white animate-pulse' : 'bg-white text-black hover:bg-gray-200'
-          }`}
-        >
-          {isLive ? '방송 종료' : '방송 시작 (ON AIR)'}
-        </button>
-      </header>
+    <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
+      <Header 
+        title={
+          <span className="flex items-center gap-2 text-red-500">
+            <span className={isLive ? "animate-pulse" : ""}>🔴</span> LIVE SYNERGY
+          </span>
+        }
+        subtitle="라이브 셀러 실시간 재고 연동 대시보드"
+        transparent
+        rightActions={
+          <button 
+            onClick={() => setIsLive(!isLive)}
+            className={`px-4 py-2 rounded-full font-bold text-sm transition-colors ${
+              isLive ? 'bg-red-600 text-white animate-pulse' : 'bg-white text-black hover:bg-zinc-200'
+            }`}
+          >
+            {isLive ? '방송 종료' : '방송 시작 (ON AIR)'}
+          </button>
+        }
+      />
 
-      <main className="max-w-4xl mx-auto space-y-6">
+      <main className="max-w-4xl mx-auto w-full space-y-6 mt-8 p-4 md:p-8">
         {stock.map((item) => (
           <div key={item.id} className="bg-neutral-800 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between border border-neutral-700">
             <div className="flex-1 mb-4 md:mb-0">

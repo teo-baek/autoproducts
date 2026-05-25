@@ -2,9 +2,17 @@
 
 import { useRoleStore } from '@/store/useRoleStore';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
   const { role } = useRoleStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
@@ -15,14 +23,22 @@ export default function Home() {
         {/* 도매상 모드 뷰 */}
         {role === 'wholesaler' && (
           <div className="col-span-1 md:col-span-2 bg-gray-50 p-10 rounded-3xl border border-gray-200">
-            <h2 className="text-2xl font-bold mb-4">🏢 도매상 워크플로우</h2>
+            <h2 className="text-2xl font-bold mb-4 flex items-center">
+              <span className="bg-zinc-200 text-sm px-3 py-1 rounded-full mr-3 text-zinc-800">도매상</span>
+              상품 관리 워크플로우
+            </h2>
             <p className="text-gray-600 mb-8">대량의 상품을 빠르게 등록하고 관리합니다.</p>
-            <Link 
-              href="/wholesaler/upload" 
-              className="inline-block bg-black text-white px-8 py-4 rounded-full font-bold hover:bg-gray-800 transition-colors"
-            >
-              엑셀 기반 대량 상품 등록 가기 ➔
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link href="/wholesaler/pos" className="flex-1 py-4 px-6 bg-emerald-500 text-white rounded-2xl text-center text-lg font-bold hover:bg-emerald-600 transition-colors shadow-lg hover:shadow-xl">
+                🏪 현장 결제 터미널 (POS)
+              </Link>
+              <Link href="/wholesaler/speed" className="flex-1 py-4 px-6 bg-black text-white rounded-2xl text-center text-lg font-bold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl">
+                ⚡ 초고속 스피드 등록
+              </Link>
+              <Link href="/wholesaler/upload" className="flex-1 py-4 px-6 bg-white border-2 border-gray-200 text-black rounded-2xl text-center text-lg font-bold hover:border-black transition-colors shadow-sm">
+                📦 엑셀 대량 업로드
+              </Link>
+            </div>
           </div>
         )}
 

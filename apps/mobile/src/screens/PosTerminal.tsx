@@ -1,19 +1,47 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert } from 'react-native';
 import * as Print from 'expo-print';
+import { supabase } from '../lib/supabase';
 import { useCartStore, CartItem } from '../store/useCartStore';
-
-const MOCK_PRODUCTS = [
-  { id: '1', name: '기모 오버핏 후드티', price: 35000, imageUrl: 'https://via.placeholder.com/150/000000/FFFFFF/?text=Hoodie' },
-  { id: '2', name: '카고 와이드 팬츠', price: 42000, imageUrl: 'https://via.placeholder.com/150/222222/FFFFFF/?text=Pants' },
-  { id: '3', name: '레더 크롭 자켓', price: 89000, imageUrl: 'https://via.placeholder.com/150/444444/FFFFFF/?text=Jacket' },
-  { id: '4', name: '베이직 무지 반팔', price: 12000, imageUrl: 'https://via.placeholder.com/150/666666/FFFFFF/?text=T-Shirt' },
-  { id: '5', name: '플리츠 롱 스커트', price: 38000, imageUrl: 'https://via.placeholder.com/150/888888/FFFFFF/?text=Skirt' },
-  { id: '6', name: '니트 가디건', price: 54000, imageUrl: 'https://via.placeholder.com/150/AAAAAA/FFFFFF/?text=Cardigan' },
-];
 
 export default function PosTerminal() {
   const { cart, addToCart, removeFromCart, clearCart } = useCartStore();
+  const [products, setProducts] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, price, main_image_url, product_skus(id, allocated_stock)');
+    if (data) {
+      setProducts(data);
+    }
+  };
+
+  const handleAllocateStock = async (skuId: string) => {
+    Alert.prompt(
+      '라이브 락 부여',
+      '추가로 할당할 가상 재고 수량을 입력하세요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '할당',
+          onPress: async (text) => {
+            const num = parseInt(text || '0', 10);
+            if (num > 0) {
+              const { error } = await supabase.rpc('increment_allocated_stock', { p_sku_id: skuId, qty: num });
+              if (!error) fetchProducts();
+            }
+          }
+        }
+      ],
+      'plain-text',
+      '50'
+    );
+  };
 
   const totalAmount = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
@@ -73,26 +101,38 @@ export default function PosTerminal() {
         html,
         printerUrl: undefined, // iOS/Android OS 기본 인쇄 팝업 호출
       });
-      clearCart(); // 인쇄 후 장바구니 비우기
+      // 결제 완료 후 로컬 장바구니 비우기 및 상품 재고는 무한대이므로 별도 차감 없음 (도매상)
+      clearCart();
     } catch (error) {
       console.error('인쇄 실패:', error);
       Alert.alert('인쇄 오류', '영수증 인쇄 중 문제가 발생했습니다.');
     }
   };
 
-  const renderProduct = ({ item }: { item: typeof MOCK_PRODUCTS[0] }) => (
-    <View style={styles.productCard}>
-      <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
-      <Text style={styles.productName}>{item.name}</Text>
-      <Text style={styles.productPrice}>{item.price.toLocaleString()} 원</Text>
-      <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => addToCart({ id: item.id, name: item.name, price: item.price, qty: 1 })}
-      >
-        <Text style={styles.addButtonText}>🛒 담기</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const renderProduct = ({ item }: { item: any }) => {
+    const skuId = item.product_skus?.[0]?.id;
+    const allocated = item.product_skus?.[0]?.allocated_stock || 0;
+
+    return (
+      <View style={styles.productCard}>
+        <Image source={{ uri: item.main_image_url || 'https://via.placeholder.com/150' }} style={styles.productImage} />
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productPrice}>{item.price.toLocaleString()} 원</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => addToCart({ id: item.id, name: item.name, price: item.price, qty: 1 })}
+        >
+          <Text style={styles.addButtonText}>🛒 담기</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.lockButton}
+          onPress={() => skuId && handleAllocateStock(skuId)}
+        >
+          <Text style={styles.lockButtonText}>🔒 락 부여 ({allocated}개)</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -100,7 +140,7 @@ export default function PosTerminal() {
       <View style={styles.leftPanel}>
         <Text style={styles.headerTitle}>🏷️ 매장 상품 매대</Text>
         <FlatList
-          data={MOCK_PRODUCTS}
+          data={products}
           renderItem={renderProduct}
           keyExtractor={(item) => item.id}
           numColumns={3}
@@ -213,6 +253,20 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#fff',
+    fontWeight: 'bold',
+  },
+  lockButton: {
+    backgroundColor: '#ff4444',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  lockButtonText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
   cartList: {

@@ -1,9 +1,17 @@
 'use client';
 
 import { useRoleStore } from '@/store/useRoleStore';
+import { useEffect, useState } from 'react';
 
 export default function RoleToggle() {
   const { role, toggleRole } = useRoleStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) return null;
 
   return (
     <div className="fixed top-4 right-4 z-50">
