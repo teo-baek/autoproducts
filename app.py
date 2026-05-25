@@ -10,9 +10,79 @@ import json
 from PIL import Image as PILImage, ImageOps
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+import qrcode
+import urllib.parse
 
 # 스트림릿 페이지 설정
 st.set_page_config(page_title="제품 관리 자동화", layout="wide")
+
+def get_q_param(key):
+    val = st.query_params.get(key, "")
+    if isinstance(val, list):
+        return val[0] if val else ""
+    return val
+
+# --- 모바일 뷰어 라우팅 (QR 스캔 시) ---
+if get_q_param("view") == "qr":
+    st.markdown("""
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .block-container { padding-top: 1rem; padding-bottom: 1rem; max-width: 100%; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    f_id = get_q_param("f_id")
+    folder = get_q_param("folder")
+    p_num = get_q_param("p")
+    stk = get_q_param("stk")
+    nm = get_q_param("nm")
+    
+    st.markdown(f"<h1 style='text-align: center; margin-bottom: 5px; font-weight: 800;'>{nm}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center; color: #666; margin-top: 0;'>품번: {p_num}</h3>", unsafe_allow_html=True)
+    
+    img_data = None
+    # 1. file_id가 있을 경우
+    if f_id:
+        try:
+            req = urllib.request.Request(f"https://drive.google.com/uc?id={f_id}", headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                img_data = response.read()
+        except:
+            try:
+                req = urllib.request.Request(f"https://drive.google.com/thumbnail?id={f_id}&sz=w600", headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=4) as response:
+                    img_data = response.read()
+            except:
+                pass
+                
+    # 2. file_id가 없고 폴더 기반 우회 스캔이 필요한 경우
+    if not img_data and folder and p_num:
+        for ext in ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']:
+            fallback_url = f"https://drive.google.com/thumbnail?authuser=0&sz=w600&id={folder}&filename={p_num}.{ext}"
+            try:
+                req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    img_data = response.read()
+                    if img_data:
+                        break
+            except:
+                continue
+
+    if img_data:
+        st.image(img_data, use_container_width=True)
+    else:
+        st.info("해당 제품의 이미지를 불러올 수 없습니다.")
+        
+    st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%); padding: 20px; border-radius: 15px; text-align: center; margin-top: 20px; box-shadow: 0 4px 15px rgba(255, 75, 43, 0.4);'>
+            <h4 style='margin: 0; color: rgba(255,255,255,0.9); font-size: 16px;'>현재고</h4>
+            <h2 style='margin: 5px 0 0 0; color: white; font-size: 40px; font-weight: 900;'>{stk} <span style='font-size: 20px;'>개</span></h2>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.stop() # 모바일 뷰어 모드일 경우 여기서 앱 실행 종료
 
 st.title("제품 관리 엑셀 자동화")
 st.markdown("포스기에서 다운받은 엑셀 파일(raw)과 구글 드라이브 폴더 주소를 입력하면, 셀 내부에 이미지가 삽입된 엑셀을 생성합니다.")
@@ -21,6 +91,9 @@ st.markdown("포스기에서 다운받은 엑셀 파일(raw)과 구글 드라이
 st.subheader("📋 1. 데이터 입력")
 uploaded_file = st.file_uploader("매장 포스기 제품 엑셀 파일을 업로드하세요. (XLSX, XLS, CSV 지원)", type=["csv", "xlsx", "xls"])
 folder_url = st.text_input("제품 사진이 업로드되어 있는 구글 드라이브 폴더 주소(URL)를 입력하세요.")
+
+st.markdown("<small style='color:gray;'>※ 스마트폰에서 QR을 스캔하려면 아래 주소가 <b>localhost</b>가 아닌 <b>실제 PC의 IP 주소(예: http://192.168.0.5:8501)</b> 또는 <b>실제 배포된 도메인</b>이어야 합니다.</small>", unsafe_allow_html=True)
+app_url = st.text_input("현재 스트림릿 앱 접속 주소 (QR 연동용, 마지막에 / 제외)", value="http://localhost:8501")
 
 def extract_folder_id(url):
     """구글 드라이브 URL에서 폴더 고유 ID를 추출하는 함수"""
@@ -93,7 +166,7 @@ def download_thumbnail_image(file_id):
 def process_single_row_image(p_num, file_list_map, folder_id):
     """5015.0 실수형 변환 오차를 정규식으로 완벽 분리 후 이미지 매칭 및 다운로드"""
     if not p_num:
-        return "NONE"
+        return {"image": "NONE", "file_id": ""}
     
     # 1단계: 판다스가 실수로 붙인 소수점 .0을 완벽히 도려내 정형화 (NameError 버그 완치)
     clean_p_num = re.sub(r'\.0$', '', str(p_num).strip())
@@ -130,11 +203,11 @@ def process_single_row_image(p_num, file_list_map, folder_id):
             img_buffer = io.BytesIO()
             pil_img.save(img_buffer, format="JPEG")
             img_buffer.seek(0)
-            return img_buffer
+            return {"image": img_buffer, "file_id": file_id if file_id else ""}
         except:
-            return "ERROR"
+            return {"image": "ERROR", "file_id": file_id if file_id else ""}
             
-    return "NONE"
+    return {"image": "NONE", "file_id": file_id if file_id else ""}
 
 # 2. 변환 프로세스 시작
 if st.button("파일 변환"):
@@ -222,27 +295,52 @@ if st.button("파일 변환"):
             ws = wb.active
             ws.title = "방송제품목록"
 
-            headers = ["사진", "품번", "상품명", "색상", "상세사이즈", "혼용률", "도매가", "판매가", "재고", "P CODE"]
+            headers = ["사진", "품번", "상품명", "색상", "상세사이즈", "혼용률", "도매가", "판매가", "재고", "P CODE", "QR 링크"]
             ws.append(headers)
 
             for idx, data_row in enumerate(parsed_rows_data):
                 ws.append([
                     "", data_row["p_number"], data_row["item_name"], data_row["color"],
                     data_row["size"], data_row["mix_ratio"], data_row["wholesale"],
-                    data_row["retail"], data_row["stock"], data_row["p_code"]
+                    data_row["retail"], data_row["stock"], data_row["p_code"], ""
                 ])
                 
                 current_row_idx = idx + 2
                 img_res = image_results[idx]
                 
-                if isinstance(img_res, io.BytesIO):
+                img_buffer = img_res["image"]
+                f_id = img_res["file_id"]
+                
+                # 제품 사진 삽입
+                if isinstance(img_buffer, io.BytesIO):
                     try:
-                        xl_img = OpenpyxlImage(img_res)
+                        xl_img = OpenpyxlImage(img_buffer)
                         ws.add_image(xl_img, f"A{current_row_idx}")
                     except:
                         ws.cell(row=current_row_idx, column=1, value="이미지 오류")
                 else:
                     ws.cell(row=current_row_idx, column=1, value="사진 없음")
+                    
+                # QR 링크 생성 및 삽입
+                qr_url = f"{app_url.rstrip('/')}/?view=qr&f_id={str(f_id)}&folder={str(folder_id)}&p={urllib.parse.quote(str(data_row['p_number']))}&stk={urllib.parse.quote(str(data_row['stock']))}&nm={urllib.parse.quote(str(data_row['item_name']))}"
+                try:
+                    qr = qrcode.QRCode(box_size=3, border=1)
+                    qr.add_data(qr_url)
+                    qr.make(fit=True)
+                    qr_img = qr.make_image(fill_color="black", back_color="white")
+                    
+                    qr_buffer = io.BytesIO()
+                    qr_img.save(qr_buffer, format="PNG")
+                    qr_buffer.seek(0)
+                    
+                    xl_qr = OpenpyxlImage(qr_buffer)
+                    # 엑셀 셀 안에 쏙 들어가도록 이미지 사이즈 강제 조정 (가로/세로 100px)
+                    xl_qr.width = 100
+                    xl_qr.height = 100
+                    
+                    ws.add_image(xl_qr, f"K{current_row_idx}")
+                except Exception as e:
+                    ws.cell(row=current_row_idx, column=11, value="QR 오류")
 
             # --- 디자이너 무드 스타일링 공정 ---
             font_main = Font(name="맑은 고딕", size=10)
@@ -277,6 +375,7 @@ if st.button("파일 변환"):
                         cell.alignment = align_left
 
             ws.column_dimensions['A'].width = 16
+            ws.column_dimensions['K'].width = 16
             for col in ws.iter_cols(min_col=2, max_col=10):
                 max_len = max(len(str(cell.value or '')) for cell in col)
                 col_letter = col[0].column_letter
