@@ -92,8 +92,8 @@ st.subheader("📋 1. 데이터 입력")
 uploaded_file = st.file_uploader("매장 포스기 제품 엑셀 파일을 업로드하세요. (XLSX, XLS, CSV 지원)", type=["csv", "xlsx", "xls"])
 folder_url = st.text_input("제품 사진이 업로드되어 있는 구글 드라이브 폴더 주소(URL)를 입력하세요.")
 
-st.markdown("<small style='color:gray;'>※ 스마트폰에서 QR을 스캔하려면 아래 주소가 <b>localhost</b>가 아닌 <b>실제 PC의 IP 주소(예: http://192.168.0.5:8501)</b> 또는 <b>실제 배포된 도메인</b>이어야 합니다.</small>", unsafe_allow_html=True)
-app_url = st.text_input("현재 스트림릿 앱 접속 주소 (QR 연동용, 마지막에 / 제외)", value="http://localhost:8501")
+# 스트림릿 클라우드에 배포된 고정 퍼블릭 주소 하드코딩
+app_url = "https://autoappucts-mesgtt2ne6wscqus6ggnrq.streamlit.app"
 
 def extract_folder_id(url):
     """구글 드라이브 URL에서 폴더 고유 ID를 추출하는 함수"""
