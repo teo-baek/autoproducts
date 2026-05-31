@@ -327,21 +327,9 @@ if st.button("파일 변환"):
                 # QR 링크 생성 및 삽입
                 qr_url = f"{app_url.rstrip('/')}/?view=qr&f_id={str(f_id)}&folder={str(folder_id)}&p={urllib.parse.quote(str(data_row['p_number']))}&stk={urllib.parse.quote(str(data_row['stock']))}&nm={urllib.parse.quote(str(data_row['item_name']))}"
                 try:
-                    qr = qrcode.QRCode(box_size=3, border=1)
-                    qr.add_data(qr_url)
-                    qr.make(fit=True)
-                    qr_img = qr.make_image(fill_color="black", back_color="white")
-                    
-                    qr_buffer = io.BytesIO()
-                    qr_img.save(qr_buffer, format="PNG")
-                    qr_buffer.seek(0)
-                    
-                    xl_qr = OpenpyxlImage(qr_buffer)
-                    # 엑셀 셀 안에 쏙 들어가도록 이미지 사이즈 강제 조정 (가로/세로 100px)
-                    xl_qr.width = 100
-                    xl_qr.height = 100
-                    
-                    ws.add_image(xl_qr, f"K{current_row_idx}")
+                    # QR 이미지 대신 URL 텍스트 및 하이퍼링크 삽입
+                    cell = ws.cell(row=current_row_idx, column=11, value=qr_url)
+                    cell.hyperlink = qr_url
                 except Exception as e:
                     ws.cell(row=current_row_idx, column=11, value="QR 오류")
 
