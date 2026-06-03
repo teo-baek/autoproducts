@@ -1409,3 +1409,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: side-effect (updated_at 트리거), breaking (루트 deps 매니페스트 제거 — backend로 일원화됨)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-015 (요구사항), CH-20260603-016 (개발방향)
+
+### [2026-06-03 22:38] [코드-수정] (JWT 검증 JWKS 전환)
+- **id**: CH-20260603-019
+- **이유**: Supabase 비대칭 JWT(ES256) 대응 — JWKS 공개키 검증 도입(HS256은 레거시 폴백 유지)
+- **무엇이**: app/core/auth.py(verify_supabase_jwt + PyJWKClient, get_current_user 가 사용), app/core/config.py(supabase_jwks_url 파생, jwt_secret 선택), backend/pyproject.toml(pyjwt→pyjwt[crypto]) + uv.lock, tests/test_auth_dep.py(JWKS garbage 테스트), backend/.env.example 문구 갱신
+- **영향범위**: 인증 경로. **36 passed**. decode_jwt(HS256)은 레거시 헬퍼로 유지.
+- **위험 카테고리**: breaking (검증 알고리즘 변경 — 신규 Supabase 프로젝트 정합)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-018 (개발방향)

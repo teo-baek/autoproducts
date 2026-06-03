@@ -27,7 +27,7 @@
 ```
 
 - **프론트엔드는 Supabase에 직접 붙지 않고 FastAPI를 경유**한다. 이유: 엑셀 파싱(`pandas`/`openpyxl`)·QR 생성(`qrcode`/`Pillow`)·엑셀 QR 삽입은 서버에서만 가능하고, **가격 노출 결정(NFR-2)은 반드시 서버 권위**여야 하기 때문.
-- **인증**: 프론트가 Supabase Auth로 로그인 → JWT 획득 → FastAPI 호출 시 `Authorization: Bearer <jwt>` → FastAPI가 JWT 검증 + `profiles`에서 역할/승인상태 조회.
+- **인증**: 프론트가 Supabase Auth로 로그인 → JWT 획득 → FastAPI 호출 시 `Authorization: Bearer <jwt>` → FastAPI가 **JWKS 공개키(비대칭 ES256)로 JWT 검증**(신규 Supabase 기본; `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) + `profiles`에서 역할/승인상태 조회. (레거시 HS256 대칭 시크릿 방식도 `decode_jwt`로 폴백 가능)
 - **DB 접근**: FastAPI는 Supabase **service role 키**로 Postgres 접근(RLS 우회). RLS는 직접 접근 대비 **방어선(defense-in-depth)**으로 유지.
 
 ## 2. 영향 컴포넌트
@@ -382,3 +382,10 @@ backend/
 - **무엇이**: §3.13 감사 컬럼(created_by/updated_by/updated_at + set_updated_at 트리거), §6 핵심결정-8
 - **영향범위**: code(migration _04, entity models, products 경로 wiring)
 - **연관 항목**: CH-20260603-015 (요구사항), CH-20260603-017 (코드)
+
+### [2026-06-03 22:38] [개발방향-수정]
+- **id**: CH-20260603-018
+- **이유**: Supabase 신규 프로젝트는 비대칭 JWT(ES256)가 기본 — HS256 공유시크릿 검증으론 실토큰 검증 불가 → JWKS 공개키 검증으로 전환
+- **무엇이**: §1 인증 설명(JWKS 공개키, `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`), config `supabase_jwks_url` 파생, SUPABASE_JWT_SECRET 선택(레거시)화
+- **영향범위**: code(auth.py verify_supabase_jwt, config.py, pyjwt[crypto]), .env.example 문구
+- **연관 항목**: CH-20260603-019 (코드)
