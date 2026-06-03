@@ -1392,3 +1392,11 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: none (순수 추가)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-008 (도매/에이전시 분리), CH-20260603-012 (soft delete)
+
+### [2026-06-03 22:04] [코드-수정] (엔티티 → app/entities/ 분리)
+- **id**: CH-20260603-014
+- **이유**: `schemas`는 DTO 개념 — 도메인 엔티티/ENUM 을 `app/entities/`로 분리 (레이어 혼동 방지)
+- **무엇이**: app/entities/{__init__,enums,models}.py 신규(schemas/enums.py + entities.py 이동), app/schemas/에서 제거(이제 DTO만: auth/product), tests/test_entities.py import 갱신, CLAUDE.md 레이어 규칙 추가
+- **영향범위**: move/additive — 동작 무변경, **35 passed**. 사용처는 test_entities.py뿐이라 안전.
+- **위험 카테고리**: none
+- **연관 항목**: CH-20260603-013 (엔티티 모델 최초 추가)
