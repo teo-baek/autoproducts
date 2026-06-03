@@ -4,7 +4,8 @@ from app.core.rbac import require_role, require_approved
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.schemas.product import ProductCreate
-from app.services.products import register_product
+from datetime import datetime, timezone
+from app.services.products import register_product, soft_delete_product
 from app.services.platform_code import next_platform_code
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -36,4 +37,5 @@ def patch_product(pid: str, patch: dict, user: CurrentUser = Depends(get_current
 @router.delete("/{pid}")
 def delete_product(pid: str, user: CurrentUser = Depends(get_current_user)):
     require_approved(user); require_role("wholesaler")(user)
-    return SupabaseProductRepo().update_product(pid, {"status": "archived"})
+    # hard DELETE 금지 — soft delete(deleted_at). 자식(skus/images)은 DB 트리거가 cascade
+    return soft_delete_product(SupabaseProductRepo(), pid, datetime.now(timezone.utc).isoformat())

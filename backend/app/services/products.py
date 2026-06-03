@@ -23,3 +23,8 @@ def update_product(repo, product_id: str, patch: dict) -> dict:
 
 def archive_product(repo, product_id: str) -> dict:
     return repo.update_product(product_id, {"status": "archived"})
+
+
+def soft_delete_product(repo, product_id: str, deleted_at: str) -> dict:
+    # hard DELETE 금지 — deleted_at 만 찍는다. 자식(skus/images)은 DB soft-cascade 트리거가 처리.
+    return repo.update_product(product_id, {"deleted_at": deleted_at})

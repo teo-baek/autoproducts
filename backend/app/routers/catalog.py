@@ -30,7 +30,7 @@ def list_catalog(
     sb = get_supabase()
     q = sb.table("products").select(
         "platform_code,item_name,product_skus(color,size,wholesale_price,retail_price,wholesaler_id)"
-    ).eq("status", "active").order("created_at").limit(limit)
+    ).eq("status", "active").is_("deleted_at", "null").order("created_at").limit(limit)
     if cursor:
         q = q.gt("created_at", cursor)
     rows = q.execute().data
