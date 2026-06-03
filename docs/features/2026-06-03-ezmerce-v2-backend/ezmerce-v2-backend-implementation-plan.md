@@ -1418,3 +1418,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: breaking (검증 알고리즘 변경 — 신규 Supabase 프로젝트 정합)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-018 (개발방향)
+
+### [2026-06-04 00:10] [코드-수정] (갭 A: 카탈로그 엑셀 출력 라우트 와이어링, Task 14/15 잔여)
+- **id**: CH-20260604-020
+- **이유**: 계획 §4 미구현 갭 — excel_export 서비스는 있으나 라우트 미연결. `GET /catalog/export.xlsx` 추가(FR-3).
+- **무엇이**: app/services/excel_export.py(_build_workbook 추출 + catalog_xlsx_bytes 메모리 생성 추가, build_catalog_xlsx 동작 유지), app/routers/catalog.py(_query_catalog_rows 공용화, _export_row, GET /catalog/export.xlsx — 승인가드+역할별 가격 셰이핑+QR), tests/test_catalog_export.py(신규 3)
+- **영향범위**: 카탈로그 경로. **39 passed**(+3). 라우트 16개. 엑셀 출력은 _EXPORT_MAX=1000 상한(페이지네이션 미적용, 위험 주석).
+- **위험 카테고리**: scale (대량 카탈로그 시 상한 누락), non-breaking
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-019 (직전 코드 변경), 계획 Task 14(엑셀출력)·Task 15(카탈로그)

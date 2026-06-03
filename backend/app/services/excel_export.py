@@ -6,7 +6,7 @@ from app.services.qr import qr_target_url, generate_qr_png
 HEADERS = ["품번", "상품명", "가격", "QR"]
 
 
-def build_catalog_xlsx(items: list[dict], out_path: str, base_url: str) -> str:
+def _build_workbook(items: list[dict], base_url: str):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(HEADERS)
@@ -18,5 +18,16 @@ def build_catalog_xlsx(items: list[dict], out_path: str, base_url: str) -> str:
         img = XLImage(io.BytesIO(png)); img.width = img.height = 64
         ws.add_image(img, f"D{i}")        # 최우측 열(QR)에 삽입
         ws.row_dimensions[i].height = 50
-    wb.save(out_path)
+    return wb
+
+
+def build_catalog_xlsx(items: list[dict], out_path: str, base_url: str) -> str:
+    _build_workbook(items, base_url).save(out_path)
     return out_path
+
+
+def catalog_xlsx_bytes(items: list[dict], base_url: str) -> bytes:
+    """파일 경로 없이 메모리(BytesIO)로 xlsx 바이트 생성 — HTTP 다운로드 응답용."""
+    buf = io.BytesIO()
+    _build_workbook(items, base_url).save(buf)
+    return buf.getvalue()
