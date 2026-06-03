@@ -264,6 +264,16 @@ CREATE POLICY products_owner_write ON public.products FOR ALL
 
 > 가격 컬럼 숨김은 RLS로 불가하므로 **반드시 FastAPI 응답 셰이핑(§3.10)으로 보장**. RLS는 "미승인 차단/타조직 쓰기 차단"의 보조선.
 
+### 3.12 소프트 삭제 정책 (NFR-5)
+
+hard `DELETE` 금지. 전 테이블 `deleted_at TIMESTAMPTZ`(NULL=살아있음), 삭제 = `deleted_at = now()`.
+
+- **조회**: 항상 `WHERE deleted_at IS NULL` (앱 + RLS).
+- **UNIQUE**: 부분 인덱스 `... WHERE deleted_at IS NULL` (soft delete 후 같은 값 재등록 허용). 단 `platform_code`는 영구 UNIQUE(재사용 X).
+- **soft-cascade**: 부모 `deleted_at` 세팅 → 자식 전파 (트리거 `soft_cascade_product` / `soft_cascade_wholesaler`). `ON DELETE CASCADE` FK는 하드삭제 비상 안전망으로만 유지.
+- **archived ≠ deleted**: `status='archived'`(진열 내림)와 `deleted_at`(제거)는 별개 개념.
+- 마이그레이션: `_03_soft_delete.sql`. 규칙 요약은 프로젝트 루트 `CLAUDE.md` → DB 규칙.
+
 ## 4. 외부 인터페이스 (API 윤곽)
 
 > 상세 요청/응답 스키마는 write-plan에서 확정. 1차 엔드포인트 윤곽만.
@@ -306,6 +316,7 @@ backend/
 4. **인증 = Supabase Auth + profiles 미러 테이블**. 대안(자체 인증) 기각: 재발명.
 5. **wholesalers / agencies 테이블 분리** (vs 단일 organizations+type). 채택: 도매업체(상품 소유)와 에이전시(셀러 관리)는 다른 주체 + 관계·향후 기능(에이전시 슈퍼관리자/정산 vs 도매 주문/배송)이 발산 → FK 타입 안전(`products.wholesaler_id`→`wholesalers`만) + 의도 명확. `profiles`는 `wholesaler_id`/`agency_id`로 소속 구분.
 6. **이미지 매칭 = product_images(match_status) + upload_jobs 영속화**. 대안(업로드 시 인메모리 매칭) 기각: 수작업 매칭 UI에 영속 상태 필요.
+7. **soft delete 전면 채택** (vs hard DELETE). `deleted_at`만(boolean 미사용), 부분 유니크 + soft-cascade 트리거로 CASCADE 대체. 채택: B2B 감사·복구·과거 참조 보존. 대안(hard delete) 기각: 복구 불가·참조 깨짐.
 
 ## 7. 예비 위험
 
@@ -348,3 +359,10 @@ backend/
 - **무엇이**: §3.1 ER, §3.2 ENUM(org_type 제거), §3.3 wholesalers/agencies, §3.4 profiles(organization_id → wholesaler_id+agency_id), §3.5/3.7/3.8 wholesaler_org_id → wholesaler_id, §3.11 RLS, §6 핵심결정-5
 - **영향범위**: code(migration base 재작성, schemas/auth.py, routers/catalog·products, services/products), implementation-plan Task 2 DDL은 본 마이그레이션으로 supersede
 - **연관 항목**: CH-20260603-009 (코드)
+
+### [2026-06-03 21:52] [개발방향-수정]
+- **id**: CH-20260603-011
+- **이유**: NFR-5 soft delete 정책 반영
+- **무엇이**: §3.12 소프트 삭제 정책 신설, §3.11 RLS products 정책에 `deleted_at IS NULL` 추가, §6 핵심결정-7
+- **영향범위**: code(migration _03 — deleted_at 전 테이블, 부분 유니크, soft-cascade 트리거, RLS), 루트 CLAUDE.md
+- **연관 항목**: CH-20260603-010 (요구사항), CH-20260603-012 (코드)

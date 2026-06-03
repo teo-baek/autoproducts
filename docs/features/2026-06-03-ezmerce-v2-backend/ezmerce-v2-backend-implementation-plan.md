@@ -1374,3 +1374,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: breaking (스키마 컬럼/테이블명 변경 — 단, DB 미적용 상태라 base 마이그레이션 직접 정리. 라이브 적용본 없었음)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-008 (개발방향)
+
+### [2026-06-03 21:52] [코드-수정] (soft delete 전면 도입)
+- **id**: CH-20260603-012
+- **이유**: hard DELETE 대신 soft delete (deleted_at) 전 테이블 도입 + soft-cascade 트리거로 CASCADE 대체
+- **무엇이**: migrations/2026-06-03_v2_core_03_soft_delete.sql(신규 — deleted_at 7테이블, 부분 유니크, soft_cascade_product/wholesaler 트리거, RLS 필터), app/services/products.py(soft_delete_product), app/routers/products.py(DELETE→deleted_at), app/routers/catalog.py(조회 deleted_at 필터), tests/test_product_archive.py(soft delete 테스트), **루트 CLAUDE.md 신규(DB 규칙 — 삭제 정책 문서화)**
+- **영향범위**: 삭제/조회 경로 전반. 앱 14 라우트 정상, **31 passed**. products UNIQUE → 부분 인덱스 전환.
+- **위험 카테고리**: breaking (UNIQUE→부분 인덱스), side-effect (트리거 cascade — 부모 삭제 시 자식 전파)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-010 (요구사항), CH-20260603-011 (개발방향)
