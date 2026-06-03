@@ -3,6 +3,7 @@
 폐쇄형 B2B 도매 카탈로그/주문 솔루션 (고객: LALAS). 1차 백엔드 = FastAPI + Supabase(Postgres/Auth/Storage).
 - 현재 작업 브랜치: `v2-dev`
 - 백엔드: `backend/` (FastAPI, `.venv` = uv 관리). 테스트: `cd backend && .venv/bin/python -m pytest`
+- 의존성: `backend/pyproject.toml` + `backend/uv.lock` (uv 표준). 설치/재현: `cd backend && uv sync --all-groups`. 추가는 `uv add <pkg>` (또는 dev/notebook 그룹: `uv add --group dev <pkg>`). `backend/requirements.txt`는 `uv export` **파생본**이라 직접 편집 금지.
 - 설계 문서/변경이력: `docs/features/2026-06-03-ezmerce-v2-backend/`
 - DB 마이그레이션: `backend/migrations/` (실행 순서: `_v2_core.sql` → `_02_price_visibility.sql` → `_03_soft_delete.sql`)
 
