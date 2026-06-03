@@ -1463,3 +1463,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: security(IDOR+mass-assignment 차단), 규칙준수(soft-delete 필터), breaking 아님
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260604-023 (uploads 동일 계열 IDOR 수정)
+
+### [2026-06-04 02:20] [코드-수정] (라이브 스모크로 발견한 catalog 잠복 버그 수정)
+- **id**: CH-20260604-025
+- **이유**: `_05` 적용 후 라이브 스모크 실행 중 `/catalog`·`/catalog/export.xlsx` 가 500 — select 가 `product_skus(...,wholesaler_id)` 로 **SKU 에 없는 wholesaler_id 컬럼**을 임베드 조회(PostgREST `column product_skus_1.wholesaler_id does not exist`). wholesaler_id 는 products(상위) 컬럼. 단위테스트가 _query_catalog_rows 를 목킹해 라이브에서만 드러난 잠복 버그(원 catalog 구현부터 존재).
+- **무엇이**: app/routers/catalog.py(select 에서 wholesaler_id 를 products 최상위로 이동 + SKU embed 에서 제거, _normalize 가 r["wholesaler_id"] 로 product_org 설정), tests/test_catalog_export.py(픽스처 wholesaler_id 최상위 이동), notebooks/ezmerce_v2_api_tests.ipynb(이미지 파일명 정확-stem 매칭으로 수정: -2001_front.jpg→-2001.jpg)
+- **영향범위**: 카탈로그/엑셀 경로. 단위 **65 passed** 유지. **라이브 스모크 24 PASS / 0 FAIL**(가입·승인·상품CRUD·platform_code·대량업로드·자동/수동매칭·IDOR404·카탈로그·export·QR·공개카드·미승인403, cleanup 포함). gotrue res.user.id 형태도 라이브 확인(이전 RISK 해소).
+- **위험 카테고리**: 버그수정(라이브 500 → 정상), breaking 아님
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260604-020 (catalog export 최초 와이어링), CH-20260604-022/023 (uploads)

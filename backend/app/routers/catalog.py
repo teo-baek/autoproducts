@@ -26,8 +26,9 @@ def shape_catalog_item(row: dict, user: CurrentUser) -> dict:
 
 
 def _query_catalog_rows(sb, limit: int, cursor: str | None = None) -> list[dict]:
+    # wholesaler_id 는 products(상위) 컬럼 — product_skus 엔 없음(잠복 버그였음)
     q = sb.table("products").select(
-        "platform_code,item_name,product_skus(color,size,wholesale_price,retail_price,wholesaler_id)"
+        "platform_code,item_name,wholesaler_id,product_skus(color,size,wholesale_price,retail_price)"
     ).eq("status", "active").is_("deleted_at", "null").is_(
         "product_skus.deleted_at", "null"   # 개별 soft-delete 된 SKU 는 배열에서 제외(규칙: 모든 조회 deleted_at)
     ).order("created_at").limit(limit)
@@ -71,5 +72,7 @@ def export_catalog(user: CurrentUser = Depends(get_current_user)):
 
 
 def _normalize(r: dict) -> dict:
-    skus = [{**s, "product_org": s.get("wholesaler_id")} for s in r.get("product_skus", [])]
+    # product_org = 상품 소유 도매업체(products.wholesaler_id) — pricing 의 wholesaler 자기조직 판별용
+    org = r.get("wholesaler_id")
+    skus = [{**s, "product_org": org} for s in r.get("product_skus", [])]
     return {"platform_code": r["platform_code"], "item_name": r["item_name"], "skus": skus}

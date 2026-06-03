@@ -21,9 +21,9 @@ def test_catalog_xlsx_bytes_has_qr_header():
 
 def test_export_route_returns_xlsx_with_role_shaped_price(monkeypatch):
     rows = [{
-        "platform_code": "EZM-000001", "item_name": "셔츠",
+        "platform_code": "EZM-000001", "item_name": "셔츠", "wholesaler_id": "org-9",
         "product_skus": [{"color": "화이트", "size": "F",
-                          "wholesale_price": 12000, "retail_price": 29000, "wholesaler_id": "org-9"}],
+                          "wholesale_price": 12000, "retail_price": 29000}],
     }]
     monkeypatch.setattr(catalog_mod, "_query_catalog_rows", lambda sb, limit, cursor=None: rows)
     monkeypatch.setattr(catalog_mod, "get_supabase", lambda: object())
