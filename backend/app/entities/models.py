@@ -2,12 +2,13 @@
 
 Supabase(supabase-py)가 돌려주는 dict 를 `Product(**row)` 로 검증·역직렬화하고,
 응답 스키마로도 재사용한다. 알 수 없는 컬럼은 무시(extra='ignore').
+DTO(요청/응답 전용 형태)는 app/schemas/ 에 따로 둔다.
 """
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.enums import (
+from app.entities.enums import (
     AccountStatus,
     ImageMatch,
     PriceVisibility,

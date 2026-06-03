@@ -1,4 +1,4 @@
-from app.schemas.entities import (
+from app.entities.models import (
     Agency,
     Product,
     ProductImage,
@@ -7,7 +7,7 @@ from app.schemas.entities import (
     UploadJob,
     Wholesaler,
 )
-from app.schemas.enums import PriceVisibility, ProductStatus, UserRole
+from app.entities.enums import PriceVisibility, ProductStatus, UserRole
 
 
 def test_profile_parses_enums_and_ignores_extra():

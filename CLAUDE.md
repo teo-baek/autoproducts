@@ -21,6 +21,10 @@
 - 가격은 **서버(FastAPI) 권위**로 결정. 클라이언트가 보낸 값 신뢰 금지.
 - `profiles.price_visibility`(관리자 설정, `wholesale|retail|none`) 우선, 미설정이면 `seller_type` 기본값 폴백. 로직: `app/services/pricing.py`.
 
+### 레이어 (혼동 금지)
+- **도메인 엔티티** = `app/entities/` (`models.py` = DB 테이블 1:1 Pydantic 모델, `enums.py` = DB ENUM). Supabase dict ↔ 모델 변환·검증용.
+- **DTO(요청/응답 전용)** = `app/schemas/` (예: `CurrentUser`, `ProductCreate`). 엔티티와 섞지 말 것.
+
 ### 식별/구조
 - **품번 정규화**: 플랫폼 글로벌 `products.platform_code`(SEQUENCE 발급) + 업체 스코프 `(wholesaler_id, source_p_number)` 유니크.
 - **도매업체(`wholesalers`)와 에이전시(`agencies`)는 별개 테이블.** `products`는 `wholesaler_id`만 가리킨다(에이전시가 상품 소유 불가).
