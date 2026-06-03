@@ -1,4 +1,5 @@
--- AutoProducts V2 Core Database Schema
+-- [DEPRECATED 2026-06-03] backend/migrations/2026-06-03_v2_core.sql 로 대체됨.
+-- AutoProducts V2 Core Database Schema (구버전 — products/product_skus only)
 -- Run this script in the Supabase SQL Editor.
 
 -- 1. products (부모 테이블: 변하지 않는 마스터 데이터)
