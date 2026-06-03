@@ -1383,3 +1383,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: breaking (UNIQUE→부분 인덱스), side-effect (트리거 cascade — 부모 삭제 시 자식 전파)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-010 (요구사항), CH-20260603-011 (개발방향)
+
+### [2026-06-03 21:58] [코드-수정] (엔티티 모델 레이어 추가)
+- **id**: CH-20260603-013
+- **이유**: 테이블당 엔티티 모델이 없어 dict 로만 다루던 것을 타입 안전 Pydantic 모델로 보강 (tech-design §5 schemas 자리 채움)
+- **무엇이**: app/schemas/enums.py(신규 — 7 ENUM), app/schemas/entities.py(신규 — Wholesaler/Agency/Profile/Product/ProductSku/ProductImage/UploadJob, deleted_at·wholesaler_id/agency_id·price_visibility 반영), tests/test_entities.py(신규 4건)
+- **영향범위**: additive — 기존 코드/동작 무변경(서비스·라우터의 dict 사용은 그대로). 전체 **35 passed**. 서비스/응답에서 모델 채택은 후속 점진 적용.
+- **위험 카테고리**: none (순수 추가)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-008 (도매/에이전시 분리), CH-20260603-012 (soft delete)
