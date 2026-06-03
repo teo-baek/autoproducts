@@ -1356,3 +1356,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **연관 commits**: 16c6fa3..c9309df (15 commits)
 - **연관 항목**: CH-20260603-003(구현계획서)
 - **변경 전/후 코드**: 생략 — `git show <SHA>` 로 조회
+
+### [2026-06-03 20:59] [코드-수정] (propagation: price_visibility)
+- **id**: CH-20260603-007
+- **이유**: 관리자 설정형 가격 노출(price_visibility) 도입 — 개발 정의서 "소매 업체별 가격 보기 권한 설정" 의도 반영
+- **무엇이**: migrations/2026-06-03_v2_core_02_price_visibility.sql(신규), app/services/pricing.py(리졸버+_default_visibility), app/schemas/auth.py(CurrentUser.price_visibility), app/routers/catalog.py(셰이핑에 전달), app/routers/admin.py(set price-visibility 엔드포인트), tests/test_pricing.py(override 4건)
+- **영향범위**: 가격 노출 경로 전반. 기존 동작은 price_visibility=None 폴백으로 보존(기존 26 테스트 무변경) → 신규 4건 추가 → **30 passed**
+- **위험 카테고리**: side-effect (가격 노출 정책 변경 — 폴백으로 하위호환 유지)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-005 (요구사항), CH-20260603-006 (개발방향)

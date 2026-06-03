@@ -94,6 +94,7 @@ CREATE TABLE public.profiles (
         -- retail_seller(agency_affiliated) → 소속 에이전시 조직(type=agency)
         -- independent seller / admin → NULL
     seller_type     seller_type,              -- role='retail_seller' 일 때만 채움
+    price_visibility price_visibility,        -- 관리자 설정형 가격 노출(NULL=미설정→seller_type 기본값 폴백). 델타 마이그레이션 02
     approved_at     TIMESTAMPTZ,
     approved_by     UUID REFERENCES public.profiles(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -196,28 +197,28 @@ CREATE TABLE public.upload_jobs (
 
 ### 3.10 가격 노출 결정 (FR-5.2) — 서버 권위 로직
 
-DB 컬럼 자체를 숨기기보다 **FastAPI 응답 셰이핑**으로 처리(테스트·제어 용이). 결정 규칙:
+DB 컬럼 자체를 숨기기보다 **FastAPI 응답 셰이핑**으로 처리(테스트·제어 용이). 노출 가격은 **관리자 설정 `price_visibility` 우선**, 미설정 시 `seller_type` 기준 기본값으로 폴백:
 
-| 역할 | seller_type | 노출 가격 필드 |
+| 역할 | 기준 | 노출 가격 필드 |
 |---|---|---|
-| `retail_seller` | `independent` | `wholesale_price` (도매가) |
-| `retail_seller` | `agency_affiliated` | **없음 (price=null)** |
-| `agency` | — | `retail_price` (판매가) |
-| `wholesaler` | — | 자기 조직 상품: 도매가+판매가 모두 |
-| `admin` | — | 모두 |
+| `wholesaler`(자기 조직) / `admin` | 관리뷰(고정) | 도매가 + 판매가 모두 |
+| `retail_seller` / `agency` | `price_visibility`='wholesale' | `wholesale_price` |
+| 〃 | ='retail' | `retail_price` |
+| 〃 | ='none' 또는 미설정+기본 none | **없음 (price=null)** |
 | 미승인/비로그인 | — | **접근 거부(403)** |
+
+기본값 `_default_visibility`: independent→wholesale · agency_affiliated→none · agency→retail. 관리자가 `price_visibility`로 셀러별 override (FR-1.5).
 
 의사코드:
 ```python
-def visible_price(viewer, sku):
-    if viewer.status != 'approved': raise Forbidden
-    match (viewer.role, viewer.seller_type):
-        case ('retail_seller', 'independent'): return {'price': sku.wholesale_price}
-        case ('retail_seller', 'agency_affiliated'): return {'price': None}
-        case ('agency', _): return {'price': sku.retail_price}
-        case ('wholesaler', _) if sku.product.wholesaler_org_id == viewer.organization_id:
-            return {'wholesale_price': sku.wholesale_price, 'retail_price': sku.retail_price}
-        case ('admin', _): return {'wholesale_price': ..., 'retail_price': ...}
+def visible_price(role, seller_type, sku, viewer_org=None, price_visibility=None):
+    if role == 'wholesaler' and viewer_org == sku['product_org']:
+        return {'wholesale_price': ..., 'retail_price': ...}   # 관리뷰
+    if role == 'admin':
+        return {'wholesale_price': ..., 'retail_price': ...}
+    vis = price_visibility or _default_visibility(role, seller_type)   # 관리자 설정 우선
+    if vis == 'wholesale': return {'price': sku['wholesale_price']}
+    if vis == 'retail':    return {'price': sku['retail_price']}
     return {'price': None}
 ```
 
@@ -263,6 +264,7 @@ CREATE POLICY products_owner_write ON public.products FOR ALL
 |---|---|---|---|
 | POST | `/auth/register` | public | 가입 요청(상태 pending) |
 | POST | `/admin/accounts/{id}/approve` `/reject` | admin | 계정 승인/거절 (FR-1.3) |
+| POST | `/admin/accounts/{id}/price-visibility` | admin | 소매 셀러 가격 노출 설정 (FR-1.5) |
 | GET | `/admin/accounts?status=pending` | admin | 승인 대기 목록 |
 | POST | `/products` | wholesaler | 단건 등록 (FR-2.1) |
 | PATCH/DELETE | `/products/{id}` | wholesaler | 수정/삭제/보관 (FR-2.4) |
@@ -324,3 +326,10 @@ backend/
 - **무엇이**: ezmerce-v2-backend-tech-design.md 전체 (§1 아키텍처 ~ §8 테스트 전략, §3 전체 DDL 포함)
 - **영향범위**: setup_v2_schema.sql 대체 예정, backend/ 신규 구축 예정 (현재 비어있어 깨질 호출부 없음)
 - **연관 항목**: CH-20260603-001 (requirements)
+
+### [2026-06-03 20:59] [개발방향-수정]
+- **id**: CH-20260603-006
+- **이유**: FR-1.5(관리자 가격 노출 설정) 반영 — price_visibility 도입 (change-propagation)
+- **무엇이**: §3.4 profiles에 `price_visibility` 컬럼, §3.10 리졸버 규칙/의사코드(관리자 설정 우선 + seller_type 폴백), §4 `/admin/accounts/{id}/price-visibility` 엔드포인트
+- **영향범위**: implementation-plan, code(pricing.py/catalog.py/admin.py/schemas/migration delta 02)
+- **연관 항목**: CH-20260603-005 (요구사항), CH-20260603-007 (코드)
