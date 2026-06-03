@@ -1,10 +1,10 @@
 from app.schemas.product import ProductCreate
 
 
-def register_product(repo, org_id: str, payload: ProductCreate) -> dict:
+def register_product(repo, wholesaler_id: str, payload: ProductCreate) -> dict:
     code = repo.next_platform_code()
     product = repo.insert_product({
-        "wholesaler_org_id": org_id,
+        "wholesaler_id": wholesaler_id,
         "platform_code": code,
         "source_p_number": payload.source_p_number,
         "item_name": payload.item_name,

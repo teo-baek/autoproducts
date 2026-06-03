@@ -13,7 +13,7 @@ def shape_catalog_item(row: dict, user: CurrentUser) -> dict:
     for sku in row.get("skus", []):
         price = visible_price(
             user.role, user.seller_type, sku,
-            viewer_org=user.organization_id,
+            viewer_org=user.wholesaler_id,
             price_visibility=user.price_visibility,  # 관리자 설정 우선
         )
         shaped_skus.append({"color": sku["color"], "size": sku["size"], **price})
@@ -29,7 +29,7 @@ def list_catalog(
     require_approved(user)  # 미승인 → 403 (FR-5.1 / AC-6)
     sb = get_supabase()
     q = sb.table("products").select(
-        "platform_code,item_name,product_skus(color,size,wholesale_price,retail_price,wholesaler_org_id)"
+        "platform_code,item_name,product_skus(color,size,wholesale_price,retail_price,wholesaler_id)"
     ).eq("status", "active").order("created_at").limit(limit)
     if cursor:
         q = q.gt("created_at", cursor)
@@ -38,5 +38,5 @@ def list_catalog(
 
 
 def _normalize(r: dict) -> dict:
-    skus = [{**s, "product_org": s.get("wholesaler_org_id")} for s in r.get("product_skus", [])]
+    skus = [{**s, "product_org": s.get("wholesaler_id")} for s in r.get("product_skus", [])]
     return {"platform_code": r["platform_code"], "item_name": r["item_name"], "skus": skus}

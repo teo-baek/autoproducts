@@ -22,15 +22,15 @@ class SupabaseProductRepo:
 @router.post("")
 def create_product(payload: ProductCreate, user: CurrentUser = Depends(get_current_user)):
     require_approved(user); require_role("wholesaler")(user)
-    if not user.organization_id:
-        raise HTTPException(400, "no organization")
-    return register_product(SupabaseProductRepo(), user.organization_id, payload)
+    if not user.wholesaler_id:
+        raise HTTPException(400, "no wholesaler")
+    return register_product(SupabaseProductRepo(), user.wholesaler_id, payload)
 
 
 @router.patch("/{pid}")
 def patch_product(pid: str, patch: dict, user: CurrentUser = Depends(get_current_user)):
     require_approved(user); require_role("wholesaler")(user)
-    return SupabaseProductRepo().update_product(pid, patch)  # RISK(side-effect): 소유 org 검증 필요
+    return SupabaseProductRepo().update_product(pid, patch)  # RISK(side-effect): 소유 wholesaler 검증 필요
 
 
 @router.delete("/{pid}")
