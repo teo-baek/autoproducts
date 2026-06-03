@@ -116,7 +116,7 @@
           <text class="sub" x="500" y="53" text-anchor="middle">Supabase Auth (외부)</text></g>
         <g><rect x="400" y="108" width="200" height="56" rx="11" fill="#241d0e" stroke="#e7b24c" stroke-width="1.5"/>
           <text class="bt" x="500" y="132" text-anchor="middle" fill="#e7b24c">profiles</text>
-          <text class="sub" x="500" y="148" text-anchor="middle">계정 · 역할 · 가격권한</text></g>
+          <text class="sub" x="500" y="148" text-anchor="middle">모든 계정(role로 구분)</text></g>
         <g><rect x="50" y="200" width="210" height="52" rx="11" fill="#241d0e" stroke="#e7b24c" stroke-width="1.5"/>
           <text class="bt" x="155" y="222" text-anchor="middle" fill="#e7b24c">wholesalers</text>
           <text class="sub" x="155" y="238" text-anchor="middle">도매업체 (상품 파는 쪽)</text></g>
@@ -154,6 +154,16 @@
       </div>
       <p>아래 표 카드에는 각 테이블 고유 컬럼만 적고, 이 5개 공통 컬럼은 카드 맨 아래 🕓 줄로 요약했습니다. (upload_jobs는 created_by 원래 보유 / profiles는 approved_by 추가 보유)</p>
     </div>
+
+    <div class="common rv" style="border-left-color:var(--gold)">
+      <h4 style="color:var(--gold)">👥 주체(actor) 지도 — 조직은 테이블, 사람은 profiles</h4>
+      <div class="cc">
+        <span><b>wholesalers</b> = 도매업체(조직)</span>
+        <span><b>agencies</b> = 에이전시(조직)</span>
+        <span><b>profiles</b> = 모든 사람 계정 · role로 구분</span>
+      </div>
+      <p>로그인하는 사람 — admin · 도매직원 · <b style="color:var(--txt)">소매셀러(retail_seller)</b> · 에이전시직원 — 은 전부 <b style="color:var(--gold)">profiles</b> 한 테이블에 <b style="color:var(--gold)">role</b> 값으로 들어갑니다. <b style="color:var(--txt)">소매셀러는 별도 테이블이 아니라 profiles 행</b>(개인 계정이라서). 직원이 여럿 속하고 상품 소유·셀러 관리를 하는 <b>업체(조직)</b>만 별도 테이블(wholesalers·agencies)입니다.</p>
+    </div>
   </section>
 
   <section>
@@ -172,9 +182,10 @@
         <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
-      <div class="tbl rv"><div class="hd">profiles <span class="cnt">계정</span></div><ul>
+      <div class="tbl rv"><div class="hd">profiles <span class="cnt">모든 계정</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span><span class="ds">→ auth.users</span></li>
-        <li><span class="k col">col</span><span class="nm">role · status</span></li>
+        <li><span class="k col">col</span><span class="nm">role</span><span class="ds">admin·wholesaler·retail_seller·agency</span></li>
+        <li><span class="k col">col</span><span class="nm">status</span><span class="ds">승인상태</span></li>
         <li><span class="k col">col</span><span class="nm">seller_type</span></li>
         <li class="new"><span class="k col">col</span><span class="nm">price_visibility</span><span class="ds">관리자 설정</span></li>
         <li><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
@@ -225,7 +236,7 @@
     <h2 class="rv">말로 풀면</h2>
     <div class="plain">
       <div class="pc hl rv"><h4><span class="e">🏢</span>도매업체 ≠ 에이전시</h4><p>다른 주체라 표를 나눔. <code>wholesalers</code>=상품 파는 쪽, <code>agencies</code>=셀러 관리하는 쪽. <code>products.wholesaler_id</code>는 도매업체만 가리킴(타입 안전).</p></div>
-      <div class="pc rv"><h4><span class="e">👤</span>사람은 어디 소속?</h4><p>계정은 <code>profiles</code>. 도매 직원은 <code>wholesaler_id</code>, 에이전시 직원·소속 셀러는 <code>agency_id</code>로 소속을 가리킴.</p></div>
+      <div class="pc hl rv"><h4><span class="e">👤</span>소매셀러도 profiles 행</h4><p>로그인 계정은 전부 <code>profiles</code>(role로 구분). <b style="color:var(--txt)">소매셀러는 별도 테이블이 아니라 profiles(role=retail_seller) 행</b> — 개인 계정이라서. 도매직원은 <code>wholesaler_id</code>, 에이전시직원·소속셀러는 <code>agency_id</code>로 조직을 가리킴.</p></div>
       <div class="pc rv"><h4><span class="e">📦</span>업체 → 상품 → 옵션·이미지</h4><p>도매업체 1 → 상품 N, 상품 1 → SKU(가격·재고) N + 이미지 N. 품번 충돌은 글로벌 <code>platform_code</code>로 차단.</p></div>
       <div class="pc rv"><h4><span class="e">🔍</span>누가 어떤 가격을 보나</h4><p><code>profiles.price_visibility</code>(관리자 설정)로 결정 — 미설정이면 셀러 유형 기본값(라이브셀러→도매가, 에이전시→판매가, 소속셀러→미노출).</p></div>
       <div class="pc ok rv"><h4><span class="e">🗑️</span>삭제는 지우지 않는다 (soft delete)</h4><p>모든 테이블 <code>deleted_at</code>. 진짜 DELETE 안 하고 시각만 찍음 → 복구·감사 가능. 부모를 지우면 자식도 트리거가 함께 처리. 조회는 항상 살아있는 행만.</p></div>
