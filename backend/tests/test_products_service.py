@@ -14,7 +14,8 @@ def test_register_assigns_platform_code_and_skus():
         source_p_number="1001", item_name="린넨 셔츠",
         skus=[SkuCreate(color="화이트", size="F", wholesale_price=12000, retail_price=29000)],
     )
-    out = register_product(repo, wholesaler_id="org-1", payload=payload)
+    out = register_product(repo, wholesaler_id="org-1", payload=payload, created_by="staff-1")
     assert out["platform_code"] == "EZM-000001"
     assert repo.skus[0]["wholesale_price"] == 12000
     assert repo.products[0]["wholesaler_id"] == "org-1"
+    assert repo.products[0]["created_by"] == "staff-1"  # 누가 등록했는지

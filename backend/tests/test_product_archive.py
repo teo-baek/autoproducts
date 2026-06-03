@@ -11,6 +11,7 @@ def test_archive_sets_status_archived():
 
 def test_soft_delete_sets_deleted_at_not_status():
     repo = FakeRepo()
-    out = soft_delete_product(repo, "p1", "2026-06-03T12:00:00+00:00")
+    out = soft_delete_product(repo, "p1", "2026-06-03T12:00:00+00:00", updated_by="staff-1")
     assert out["deleted_at"] == "2026-06-03T12:00:00+00:00"
+    assert out["updated_by"] == "staff-1"  # 누가 삭제했는지
     assert "status" not in out  # 삭제(deleted_at)는 보관(status=archived)과 별개

@@ -25,12 +25,13 @@ def create_product(payload: ProductCreate, user: CurrentUser = Depends(get_curre
     require_approved(user); require_role("wholesaler")(user)
     if not user.wholesaler_id:
         raise HTTPException(400, "no wholesaler")
-    return register_product(SupabaseProductRepo(), user.wholesaler_id, payload)
+    return register_product(SupabaseProductRepo(), user.wholesaler_id, payload, created_by=user.id)
 
 
 @router.patch("/{pid}")
 def patch_product(pid: str, patch: dict, user: CurrentUser = Depends(get_current_user)):
     require_approved(user); require_role("wholesaler")(user)
+    patch = {**patch, "updated_by": user.id}  # 누가 수정했는지 기록
     return SupabaseProductRepo().update_product(pid, patch)  # RISK(side-effect): 소유 wholesaler 검증 필요
 
 
@@ -38,4 +39,4 @@ def patch_product(pid: str, patch: dict, user: CurrentUser = Depends(get_current
 def delete_product(pid: str, user: CurrentUser = Depends(get_current_user)):
     require_approved(user); require_role("wholesaler")(user)
     # hard DELETE 금지 — soft delete(deleted_at). 자식(skus/images)은 DB 트리거가 cascade
-    return soft_delete_product(SupabaseProductRepo(), pid, datetime.now(timezone.utc).isoformat())
+    return soft_delete_product(SupabaseProductRepo(), pid, datetime.now(timezone.utc).isoformat(), updated_by=user.id)

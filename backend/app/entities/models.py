@@ -3,6 +3,11 @@
 Supabase(supabase-py)가 돌려주는 dict 를 `Product(**row)` 로 검증·역직렬화하고,
 응답 스키마로도 재사용한다. 알 수 없는 컬럼은 무시(extra='ignore').
 DTO(요청/응답 전용 형태)는 app/schemas/ 에 따로 둔다.
+
+공통 감사/생명주기 컬럼:
+- created_at / updated_at : 시각 (updated_at 은 DB BEFORE UPDATE 트리거가 자동 갱신)
+- created_by / updated_by : 행위자 profiles.id (앱이 현재 사용자로 채움)
+- deleted_at : soft delete (NULL = 살아있음)
 """
 from datetime import datetime
 
@@ -28,6 +33,9 @@ class Wholesaler(_Entity):
     name: str
     biz_number: str | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -36,6 +44,9 @@ class Agency(_Entity):
     name: str
     biz_number: str | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -50,8 +61,11 @@ class Profile(_Entity):
     seller_type: SellerType | None = None
     price_visibility: PriceVisibility | None = None
     approved_at: datetime | None = None
-    approved_by: str | None = None
+    approved_by: str | None = None        # 승인한 관리자
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -70,6 +84,8 @@ class Product(_Entity):
     is_sold_out: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -82,6 +98,9 @@ class ProductSku(_Entity):
     retail_price: int | None = None
     stock: int = 0
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -95,6 +114,9 @@ class ProductImage(_Entity):
     is_representative: bool = False
     sort_order: int = 0
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -109,5 +131,7 @@ class UploadJob(_Entity):
     error_rows: int = 0
     error_detail: dict | list | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    updated_by: str | None = None
     completed_at: datetime | None = None
     deleted_at: datetime | None = None
