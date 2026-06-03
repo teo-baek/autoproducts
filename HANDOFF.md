@@ -1,7 +1,7 @@
 # HANDOFF — ezmerce v2 백엔드 (1차)
 
 > 새 세션은 이 파일 경로만 주고 시작하면 됩니다: `HANDOFF.md`
-> 최종 갱신: 2026-06-04 / 브랜치: **`v2-dev`** / 테스트: **58 passed** / 비즈니스 라우트 **16개**(+health)
+> 최종 갱신: 2026-06-04 / 브랜치: **`v2-dev`** / 단위 **65 passed** / **라이브 스모크 24 PASS·0 FAIL** / `_05` 적용됨 / 비즈니스 라우트 **16개**(+health)
 
 ## 🎯 Goal
 **ezmerce** = 폐쇄형 B2B 도매 카탈로그·주문 솔루션 (고객: **LALAS** 동대문 도매상인연합).
@@ -40,12 +40,18 @@
 - **`auth.decode_jwt` HS256** 은 신규 Supabase(비대칭) 토큰 검증 불가 → **JWKS로 전환 완료**.
 - **`platform_code.next_platform_code` 가 `rpc("nextval", ...)` 호출** → PostgREST로 호출 불가(pg_catalog 함수). **`public.next_platform_seq()` RPC(`_05`)로 교체 완료**. ⬅️ 단, **`_05` 마이그레이션은 아직 SQL Editor에서 실행 안 됨!** (Next Steps 참고)
 
+## ✅ 라이브 검증 완료 (2026-06-04)
+- `_05` 적용됨(RPC 정상). **라이브 스모크 24 PASS / 0 FAIL** — 가입·승인 → 상품 CRUD·platform_code·보관·soft delete → 엑셀 대량등록·자동매칭·수동매칭 → IDOR 404 → 카탈로그(도매가 노출)·export.xlsx·QR·공개카드(가격 미포함)·미승인 403, cleanup까지. gotrue `res.user.id` 형태도 라이브 확인(이전 RISK 해소).
+- **재검토로 보안/잠복 버그 수정**: uploads IDOR(CH-023), products IDOR+mass-assignment·공개카드 deleted_at 누락(CH-024), catalog 가 SKU에 없는 wholesaler_id 임베드 조회로 라이브 500(CH-025) — 모두 수정·검증.
+
 ## 🔜 Next Steps (이어서 할 일)
-1. **[즉시·사용자] `_05` 마이그레이션 실행** — `backend/migrations/2026-06-03_v2_core_05_platform_code_fn.sql`을 Supabase SQL Editor에 붙여 실행. (안 하면 상품 등록/엑셀 업로드 시 platform_code 발급 실패) — DDL이라 서비스키로 실행 불가(안전장치).
-   - 검증: 서비스키로 `POST {SUPABASE_URL}/rest/v1/rpc/next_platform_seq` → 숫자 반환되면 OK. (현재 404 = 미적용)
-2. **라이브 스모크 검증** (`_05` 실행 후) — 서비스키로 wholesaler 1행 → 상품 등록(platform_code 발급) → skus → updated_at 트리거/soft-cascade 동작 확인 후 정리(soft delete). ※ 라이브 DB 쓰기라 실행 전 동의 필요.
-3. **[사용자] `product-images` Storage 버킷 + RLS 생성** — 이미지 업로드 모델=프론트 직접 Storage(확정). 버킷 생성(비공개) + storage.objects RLS(SQL Editor). 실제 프론트 이미지 업로드 전까지는 미사용이라 급하진 않음.
-4. (이후) 프론트(apps/web·mobile) ↔ FastAPI 연동, Phase 2(주문/배송).
+1. **[사용자] `product-images` Storage 버킷 + RLS 생성** — 이미지 업로드 모델=프론트 직접 Storage(확정). 버킷 생성(비공개) + storage.objects RLS(SQL Editor). 실제 프론트 이미지 업로드 전까지는 미사용이라 급하진 않음. (현재 uploads 매칭은 매니페스트만으로 동작 — 실파일 불필요)
+2. (권장) 남은 should-fix 정리 — uploads #3 트랜잭션 부재(부분실패 시 job-first), #6 export 대표가격 폴백, #8 error_detail JSONB 날짜셀 직렬화. (라이브 동작엔 지장 없음)
+3. (이후) 프론트(apps/web·mobile) ↔ FastAPI 연동, Phase 2(주문/배송).
+
+## 검증/테스트 도구
+- 단위테스트: `cd backend && .venv/bin/python -m pytest -q` (65 passed). notebook 도구 포함 재현: `uv sync --all-groups`.
+- **API 라이브 통합 노트북**: `backend/notebooks/ezmerce_v2_api_tests.ipynb` — Jupyter로 Run All 하면 1차 API 전체를 실 Supabase에 대고 검증(시드→흐름→cleanup). 비정형 엑셀은 1차 비범위(표준 템플릿만, 확정).
 
 ## 확정된 결정 (이번 세션)
 - 회원가입 = **백엔드 `/auth/register`** (자가가입 role 화이트리스트로 권한상승 차단). → CH-021
