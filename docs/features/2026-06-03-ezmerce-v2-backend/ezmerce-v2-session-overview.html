@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ezmerce v2 백엔드 1차 — 세션 정리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0d0e13; --ink2:#14161f; --panel:#191c27; --panel2:#1f2330;
+    --line:#2b3040; --line2:#3a4considering; --line2:#3a4156;
+    --txt:#e8e6df; --muted:#9aa0b0; --faint:#6c7384;
+    --gold:#e7b24c; --gold-d:#b9852a; --rose:#d98a8a; --teal:#5fc7c0; --violet:#9a8cff;
+    --ok:#67c98a; --warn:#e7b24c; --bad:#e0707a;
+    --mono:'DM Mono', ui-monospace, monospace;
+    --disp:'Black Han Sans', sans-serif;
+    --body:'Gowun Dodum', sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(231,178,76,.10), transparent 60%),
+      radial-gradient(900px 600px at 0% 100%, rgba(95,199,192,.07), transparent 55%),
+      var(--ink);
+    color:var(--txt); font-family:var(--body); line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+    background-attachment:fixed;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.4; z-index:0;
+    background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+    background-size:46px 46px;
+  }
+  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 22px}
+  .disp{font-family:var(--disp); font-weight:400; letter-spacing:.5px; line-height:1.08}
+  .mono{font-family:var(--mono)}
+  .gold{color:var(--gold)} .teal{color:var(--teal)} .rose{color:var(--rose)} .muted{color:var(--muted)}
+
+  /* hero */
+  header{padding:96px 0 54px; position:relative}
+  .kick{font-family:var(--mono); font-size:12.5px; letter-spacing:5px; color:var(--gold);
+    text-transform:uppercase; margin-bottom:22px}
+  header h1{font-family:var(--disp); font-size:clamp(46px,8vw,92px); line-height:.98; color:var(--txt)}
+  header h1 .sub{display:block; font-size:clamp(20px,3vw,30px); color:var(--muted); margin-top:14px; letter-spacing:1px}
+  .lead{max-width:640px; margin-top:26px; color:var(--muted); font-size:16.5px}
+  .lead b{color:var(--txt)}
+  .stats{display:flex; flex-wrap:wrap; gap:14px; margin-top:40px}
+  .stat{flex:1; min-width:140px; background:linear-gradient(160deg,var(--panel),var(--ink2));
+    border:1px solid var(--line); border-radius:14px; padding:18px 20px}
+  .stat .n{font-family:var(--disp); font-size:38px; color:var(--gold); line-height:1}
+  .stat .l{font-size:12.5px; color:var(--faint); margin-top:8px; letter-spacing:.5px}
+
+  /* sections */
+  section{padding:52px 0; border-top:1px solid var(--line)}
+  .tag{display:inline-flex; align-items:center; gap:9px; font-family:var(--mono); font-size:12px;
+    letter-spacing:2px; color:var(--gold); text-transform:uppercase; margin-bottom:14px}
+  .tag .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+  h2{font-family:var(--disp); font-size:clamp(28px,4.4vw,42px); color:var(--txt); margin-bottom:8px}
+  .cap{color:var(--muted); max-width:680px; margin-bottom:30px; font-size:15.5px}
+  .src{margin-top:20px; font-family:var(--mono); font-size:11.5px; color:var(--faint)}
+  .src b{color:var(--teal); font-weight:500}
+
+  /* reveal */
+  .rv{opacity:0; transform:translateY(26px); transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1)}
+  .rv.in{opacity:1; transform:none}
+
+  /* architecture flow */
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap}
+  .node{flex:1; min-width:180px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:20px; position:relative}
+  .node h4{font-family:var(--mono); font-size:14px; color:var(--txt); margin-bottom:6px; letter-spacing:.5px}
+  .node small{color:var(--faint); font-size:12.5px; display:block; line-height:1.55}
+  .node.hub{border-color:var(--gold); box-shadow:0 0 0 1px rgba(231,178,76,.25), 0 12px 40px rgba(231,178,76,.08)}
+  .node.hub h4{color:var(--gold)}
+  .arrow{display:flex; align-items:center; justify-content:center; color:var(--faint); font-size:24px; padding:0 6px; min-width:42px}
+  .badge{position:absolute; top:-11px; left:16px; font-family:var(--mono); font-size:10.5px; letter-spacing:1px;
+    background:var(--gold); color:#1a1300; padding:2px 9px; border-radius:20px}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+  .chip{font-family:var(--mono); font-size:11px; color:var(--muted); border:1px solid var(--line);
+    border-radius:7px; padding:3px 9px; background:var(--ink2)}
+
+  /* ER schema */
+  .er{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px}
+  .tbl{background:var(--panel); border:1px solid var(--line); border-radius:13px; overflow:hidden}
+  .tbl .hd{font-family:var(--mono); font-size:13.5px; color:var(--ink); background:var(--gold); padding:9px 14px; letter-spacing:.5px; font-weight:500}
+  .tbl.alt .hd{background:var(--teal)} .tbl.alt2 .hd{background:var(--violet)}
+  .tbl ul{list-style:none; padding:10px 14px}
+  .tbl li{font-family:var(--mono); font-size:12px; color:var(--muted); padding:3px 0; display:flex; justify-content:space-between; gap:10px}
+  .tbl li .t{color:var(--faint); font-size:10.5px}
+  .tbl li.pk b{color:var(--gold)} .tbl li.fk b{color:var(--teal)}
+  .tbl li b{color:var(--txt); font-weight:500}
+  .relnote{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; line-height:1.9}
+  .relnote .a{color:var(--gold)}
+
+  /* pricing lens */
+  .lens{display:grid; grid-template-columns:1fr; gap:14px}
+  .prow{display:grid; grid-template-columns:1.3fr 1fr 1.4fr; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:14px 18px}
+  .prow .who{font-family:var(--mono); font-size:13.5px; color:var(--txt)}
+  .prow .who small{display:block; color:var(--faint); font-size:11px; font-family:var(--body)}
+  .lensicon{justify-self:center; font-size:20px}
+  .pval{justify-self:end; font-family:var(--mono); font-size:14px; padding:6px 13px; border-radius:8px; text-align:center; min-width:120px}
+  .pval.w{color:var(--gold); border:1px solid var(--gold-d); background:rgba(231,178,76,.08)}
+  .pval.r{color:var(--teal); border:1px solid #2f6b67; background:rgba(95,199,192,.08)}
+  .pval.none{color:var(--faint); border:1px dashed var(--line2); background:transparent}
+  .pval.block{color:var(--bad); border:1px solid #6b2f34; background:rgba(224,112,122,.08)}
+  .pricehdr{display:grid; grid-template-columns:1.3fr 1fr 1.4fr; gap:12px; font-family:var(--mono);
+    font-size:10.5px; letter-spacing:2px; color:var(--faint); text-transform:uppercase; padding:0 18px 4px}
+  .pricehdr span:last-child{justify-self:end}
+
+  /* FR grid */
+  .frs{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px}
+  .fr{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:11px; padding:16px 18px}
+  .fr .id{font-family:var(--mono); font-size:11px; color:var(--gold); letter-spacing:1px}
+  .fr h4{font-size:15.5px; color:var(--txt); margin:5px 0 6px}
+  .fr p{font-size:13px; color:var(--muted); line-height:1.6}
+  .fr .ok{font-family:var(--mono); font-size:11px; color:var(--ok); margin-top:9px; display:inline-block}
+
+  /* pipeline timeline */
+  .pipe{position:relative; padding-left:30px}
+  .pipe::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px;
+    background:linear-gradient(var(--gold),var(--teal))}
+  .step{position:relative; margin-bottom:20px}
+  .step::before{content:""; position:absolute; left:-30px; top:4px; width:16px; height:16px; border-radius:50%;
+    background:var(--ink); border:2px solid var(--gold); box-shadow:0 0 10px rgba(231,178,76,.5)}
+  .step h4{font-family:var(--mono); font-size:14px; color:var(--txt); letter-spacing:.5px}
+  .step h4 span{color:var(--gold)}
+  .step small{color:var(--faint); font-size:12.5px; font-family:var(--mono)}
+  .step p{color:var(--muted); font-size:13.5px; margin-top:3px}
+
+  /* waves */
+  .wave{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:14px}
+  .wave .wh{display:flex; align-items:center; gap:12px; margin-bottom:14px}
+  .wave .wn{font-family:var(--disp); font-size:24px; color:var(--gold)}
+  .wave .wt{font-family:var(--mono); font-size:12.5px; color:var(--muted); letter-spacing:1px}
+  .agents{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px}
+  .agent{background:var(--ink2); border:1px solid var(--line); border-radius:10px; padding:12px 14px}
+  .agent .an{font-family:var(--mono); font-size:12.5px; color:var(--teal)}
+  .agent .at{font-size:12px; color:var(--muted); margin-top:4px}
+  .agent .ax{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:6px}
+  .wfin{font-family:var(--mono); font-size:12px; color:var(--faint); margin-top:8px}
+
+  /* result */
+  .res{display:grid; grid-template-columns:1.1fr 1fr; gap:18px}
+  .gauge{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:26px; text-align:center}
+  .gauge .big{font-family:var(--disp); font-size:74px; color:var(--ok); line-height:1}
+  .gauge .lab{font-family:var(--mono); font-size:13px; color:var(--muted); letter-spacing:1px; margin-top:6px}
+  .bars{margin-top:18px; text-align:left}
+  .bar{margin:9px 0}
+  .bar .bl{font-family:var(--mono); font-size:11.5px; color:var(--muted); display:flex; justify-content:space-between}
+  .bar .track{height:7px; background:var(--ink2); border-radius:6px; margin-top:4px; overflow:hidden}
+  .bar .fill{height:100%; background:linear-gradient(90deg,var(--gold),var(--teal)); border-radius:6px; width:0; transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+  .gap{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px}
+  .gap h4{font-family:var(--mono); font-size:13px; color:var(--warn); letter-spacing:1px; margin-bottom:14px}
+  .gap ul{list-style:none}
+  .gap li{font-size:13px; color:var(--muted); padding:7px 0 7px 22px; position:relative; border-bottom:1px dashed var(--line)}
+  .gap li:last-child{border:none}
+  .gap li::before{content:"◷"; position:absolute; left:0; color:var(--warn)}
+  .gap li b{color:var(--txt)}
+
+  footer{padding:50px 0 80px; border-top:1px solid var(--line); text-align:center}
+  footer .disp{font-size:30px; color:var(--gold)}
+  footer p{color:var(--faint); font-family:var(--mono); font-size:12px; margin-top:12px}
+
+  @media (max-width:680px){
+    .flow{flex-direction:column} .arrow{transform:rotate(90deg); min-height:34px}
+    .res{grid-template-columns:1fr} .prow,.pricehdr{grid-template-columns:1fr auto; }
+    .lensicon{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kick rv">closed B2B · LALAS · 2026-06-03</div>
+    <h1 class="rv disp">ezmerce <span class="gold">v2</span> 백엔드<span class="sub">1차 — 상품 · 권한 코어 빌드</span></h1>
+    <p class="lead rv">동대문 도매상인연합(LALAS)을 위한 <b>폐쇄형 B2B 카탈로그·주문 솔루션</b>의 백엔드 1차.
+    하루 세션에서 <b>요구사항 → 기술설계 → 구현계획 → 서브에이전트 빌드</b>까지 js-super 파이프라인으로 완주했습니다.</p>
+    <div class="stats">
+      <div class="stat rv"><div class="n">6</div><div class="l">DB 테이블 + 7 ENUM</div></div>
+      <div class="stat rv"><div class="n">4</div><div class="l">RBAC 역할 + 가격 렌즈</div></div>
+      <div class="stat rv"><div class="n">15</div><div class="l">TDD task · 2 wave</div></div>
+      <div class="stat rv"><div class="n">26</div><div class="l">tests passed ✓</div></div>
+    </div>
+  </header>
+
+  <!-- 1. 아키텍처 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>01 · 아키텍처</div>
+    <h2 class="rv">FastAPI가 권위(authority)를 쥔다</h2>
+    <p class="cap rv">프론트는 Supabase에 직접 붙지 않습니다. 엑셀 파싱·QR 생성은 서버 전용 Python 라이브러리이고,
+    <b class="gold">가격 노출 결정은 반드시 서버 권위</b>여야 하기 때문입니다.</p>
+    <div class="flow rv">
+      <div class="node">
+        <h4>프론트엔드</h4>
+        <small>Next.js (web) · Expo (mobile)</small>
+        <div class="chips"><span class="chip">로그인→JWT</span><span class="chip">API 호출</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node hub">
+        <span class="badge">CORE</span>
+        <h4>FastAPI</h4>
+        <small>JWT 검증 · RBAC · 가격권위 · 엑셀/QR · 이미지 매칭</small>
+        <div class="chips"><span class="chip">service role</span><span class="chip">verify JWT</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <h4>Supabase</h4>
+        <small>Postgres + RLS · Auth(이메일) · Storage(이미지/엑셀)</small>
+        <div class="chips"><span class="chip">방어선 RLS</span></div>
+      </div>
+    </div>
+    <div class="src rv">› source <b>backend/app/main.py</b> · <b>ezmerce-v2-backend-tech-design.md §1</b></div>
+  </section>
+
+  <!-- 2. DB 스키마 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>02 · 데이터 모델</div>
+    <h2 class="rv">6 테이블 — 충돌 없는 품번, 분리된 가격</h2>
+    <p class="cap rv">사용자가 처음 요청한 "백엔드 DB구조"의 결과물. 마스터/옵션/이미지/잡을 분리하고,
+    품번은 <b class="gold">글로벌 platform_code</b> + 업체 스코프 원본품번으로 이중 차단합니다.</p>
+    <div class="er rv">
+      <div class="tbl"><div class="hd">organizations</div><ul>
+        <li class="pk"><b>id</b><span class="t">uuid</span></li>
+        <li><b>name · type</b><span class="t">wholesaler|agency</span></li>
+      </ul></div>
+      <div class="tbl"><div class="hd">profiles</div><ul>
+        <li class="pk fk"><b>id → auth.users</b><span class="t">uuid</span></li>
+        <li><b>role · status</b><span class="t">4역할/승인</span></li>
+        <li><b>seller_type</b><span class="t">소속/개인</span></li>
+        <li class="fk"><b>organization_id</b><span class="t">fk</span></li>
+      </ul></div>
+      <div class="tbl alt"><div class="hd">products</div><ul>
+        <li class="pk"><b>id</b><span class="t">uuid</span></li>
+        <li><b>platform_code</b><span class="t">UNIQUE 글로벌</span></li>
+        <li><b>source_p_number</b><span class="t">업체 원본</span></li>
+        <li><b>status</b><span class="t">active|archived</span></li>
+        <li class="fk"><b>wholesaler_org_id</b><span class="t">fk</span></li>
+      </ul></div>
+      <div class="tbl alt"><div class="hd">product_skus</div><ul>
+        <li class="pk"><b>id</b><span class="t">uuid</span></li>
+        <li><b>color · size</b><span class="t">옵션</span></li>
+        <li><b>wholesale_price</b><span class="t gold">도매가</span></li>
+        <li><b>retail_price</b><span class="t teal">판매가</span></li>
+        <li><b>stock</b><span class="t">재고</span></li>
+      </ul></div>
+      <div class="tbl alt2"><div class="hd">product_images</div><ul>
+        <li class="pk"><b>id</b><span class="t">uuid</span></li>
+        <li><b>match_status</b><span class="t">matched|unmatched</span></li>
+        <li><b>original_filename</b><span class="t">매칭키</span></li>
+      </ul></div>
+      <div class="tbl alt2"><div class="hd">upload_jobs</div><ul>
+        <li class="pk"><b>id</b><span class="t">uuid</span></li>
+        <li><b>status</b><span class="t">파싱 단계</span></li>
+        <li><b>error_detail</b><span class="t">jsonb</span></li>
+      </ul></div>
+    </div>
+    <div class="relnote rv">
+      <span class="a">organizations</span> 1→* <span class="a">profiles</span> ·
+      <span class="a">organizations(wholesaler)</span> 1→* <span class="a">products</span> 1→* <span class="a">skus / images</span><br>
+      품번 정규화 = <span class="a">platform_code</span>(SEQUENCE 원자 발급) + <span class="a">UNIQUE(org, source_p_number)</span>
+    </div>
+    <div class="src rv">› source <b>backend/migrations/2026-06-03_v2_core.sql</b></div>
+  </section>
+
+  <!-- 3. 가격 렌즈 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>03 · 권한 × 가격</div>
+    <h2 class="rv">같은 상품, 보는 사람에 따라 다른 가격</h2>
+    <p class="cap rv">DB 컬럼을 숨기는 대신 <b class="gold">FastAPI가 역할 기준으로 응답을 셰이핑</b>합니다.
+    "렌즈"를 통과한 가격만 클라이언트에 닿습니다. (클라이언트 신뢰 금지)</p>
+    <div class="pricehdr rv"><span>역할 / 유형</span><span>렌즈</span><span>노출</span></div>
+    <div class="lens">
+      <div class="prow rv"><div class="who">라이브셀러 <small>개인 셀러 (계약)</small></div><div class="lensicon">🔍</div><div class="pval w">도매가</div></div>
+      <div class="prow rv"><div class="who">에이전시</div><div class="lensicon">🔍</div><div class="pval r">판매가</div></div>
+      <div class="prow rv"><div class="who">라이브셀러 <small>에이전시 소속 셀러</small></div><div class="lensicon">🚫</div><div class="pval none">가격 미노출</div></div>
+      <div class="prow rv"><div class="who">미승인 / 비로그인</div><div class="lensicon">⛔</div><div class="pval block">403 접근불가</div></div>
+    </div>
+    <div class="src rv">› source <b>backend/app/services/pricing.py</b> · <b>routers/catalog.py</b> (FR-5.2)</div>
+  </section>
+
+  <!-- 4. 기능 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>04 · 1차 기능</div>
+    <h2 class="rv">상품 · 엑셀 · QR · 폐쇄형 카탈로그</h2>
+    <p class="cap rv">요구사항 FR-1~5 매핑. 라이브 방송 2~3일 전 PoC 배포를 목표로 범위를 통제했습니다.</p>
+    <div class="frs">
+      <div class="fr rv"><div class="id">FR-1</div><h4>RBAC · 폐쇄형 접근</h4><p>4역할 분리 · 관리자 승인 게이트 · Supabase JWT 인증</p><span class="ok">✓ auth · rbac · admin</span></div>
+      <div class="fr rv"><div class="id">FR-2</div><h4>상품 CRUD · 품번정규화</h4><p>단건등록 · 보관 · platform_code · 엑셀파서 · 이미지매칭</p><span class="ok">✓ products · platform_code</span></div>
+      <div class="fr rv"><div class="id">FR-3</div><h4>엑셀 출력 + QR</h4><p>최우측 열에 QR 이미지 자동 삽입 (폼텍 라벨 대체)</p><span class="ok">✓ excel_export</span></div>
+      <div class="fr rv"><div class="id">FR-4</div><h4>QR 코드</h4><p>상품별 QR 자동생성 · 스캔 시 공개 카드(가격 비노출)</p><span class="ok">✓ qr · public</span></div>
+      <div class="fr rv"><div class="id">FR-5</div><h4>폐쇄형 카탈로그</h4><p>승인된 셀러/에이전시만 · 역할별 가격 차등 노출</p><span class="ok">✓ catalog · pricing</span></div>
+    </div>
+    <div class="src rv">› source <b>ezmerce-v2-backend-requirements.md</b> (FR-1.1~FR-5.3)</div>
+  </section>
+
+  <!-- 5. 파이프라인 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>05 · js-super 파이프라인</div>
+    <h2 class="rv">기획에서 코드까지, 추적되는 한 줄기</h2>
+    <p class="cap rv">각 단계마다 산출물(MD) + 변경이력(CH-id)이 남아, 의사결정의 감사 추적이 끊기지 않습니다.</p>
+    <div class="pipe rv">
+      <div class="step"><h4><span>brainstorm</span> → requirements.md</h4><small>CH-20260603-001</small><p>PRD: 배경·FR·NFR·범위밖·수용기준. 4가지 핵심 결정(범위/인증/가격/엑셀) 확정.</p></div>
+      <div class="step"><h4><span>tech-design</span> → tech-design.md</h4><small>CH-20260603-002</small><p>아키텍처 + 전체 DDL + 가격 리졸버 + RLS + 핵심결정/대안.</p></div>
+      <div class="step"><h4><span>write-plan</span> → implementation-plan.md</h4><small>CH-20260603-003</small><p>15개 bite-sized TDD task + §위험 6건 + 롤백 전략.</p></div>
+      <div class="step"><h4><span>sub-driven</span> → 빌드</h4><small>CH-20260603-004 (batch 1..15)</small><p>wave-parallel 서브에이전트 + 메인 거버넌스(커밋·RISK·변경이력).</p></div>
+    </div>
+    <div class="src rv">› source <b>docs/features/2026-06-03-ezmerce-v2-backend/</b> (4 MD + HTML 사본)</div>
+  </section>
+
+  <!-- 6. wave 빌드 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>06 · wave 빌드</div>
+    <h2 class="rv">파일-분리 task를 물결로 묶어 병렬 실행</h2>
+    <p class="cap rv">메인이 DAG를 추론해 충돌 없는 task를 동시 디스패치. 서브에이전트는 코드만, 커밋·와이어링은 메인이.</p>
+    <div class="wave rv">
+      <div class="wh"><span class="wn">W1</span><span class="wt">Foundation + 순수서비스 (병렬)</span></div>
+      <div class="agents">
+        <div class="agent"><div class="an">Agent A</div><div class="at">config·main·supabase·repo·auth·rbac</div><div class="ax">T1·T3·T4·T5 → 7✓</div></div>
+        <div class="agent"><div class="an">Agent B</div><div class="at">platform_code·excel_parse·image_match·pricing</div><div class="ax">T7·T10·T11·T12 → 11✓</div></div>
+      </div>
+    </div>
+    <div class="wave rv">
+      <div class="wh"><span class="wn">W2</span><span class="wt">상품 / QR·출력 / 관리자 / 카탈로그 (병렬)</span></div>
+      <div class="agents">
+        <div class="agent"><div class="an">Agent C</div><div class="at">상품 등록·수정·보관</div><div class="ax">T8·T9</div></div>
+        <div class="agent"><div class="an">Agent D</div><div class="at">QR·공개카드·엑셀출력</div><div class="ax">T13·T14</div></div>
+        <div class="agent"><div class="an">Agent E</div><div class="at">계정 승인/거절</div><div class="ax">T6</div></div>
+        <div class="agent"><div class="an">Agent F</div><div class="at">폐쇄형 카탈로그</div><div class="ax">T15</div></div>
+      </div>
+    </div>
+    <div class="wave rv">
+      <div class="wh"><span class="wn">Fin</span><span class="wt">Finalize (메인 직접)</span></div>
+      <div class="wfin">T2 마이그레이션 작성 · main.py 라우터 와이어링 · 전체 pytest · per-task 커밋 16개</div>
+    </div>
+    <div class="src rv">› source <b>ezmerce-v2-backend-implementation-plan.md</b> · <b>git log v2-dev</b></div>
+  </section>
+
+  <!-- 7. 결과 -->
+  <section>
+    <div class="tag rv"><span class="dot"></span>07 · 결과 & 남은 일</div>
+    <h2 class="rv">초록불, 그리고 정직한 갭</h2>
+    <p class="cap rv">단위테스트는 외부 Supabase 없이 fake repo로 돌아 전부 통과. 일부 라우트 와이어링은 다음으로 남겼습니다.</p>
+    <div class="res">
+      <div class="gauge rv">
+        <div class="big">26</div>
+        <div class="lab">tests passed · 0 failed</div>
+        <div class="bars">
+          <div class="bar"><div class="bl"><span>Foundation (auth/rbac/core)</span><span>7</span></div><div class="track"><div class="fill" data-w="27"></div></div></div>
+          <div class="bar"><div class="bl"><span>순수서비스 (가격/품번/엑셀/매칭)</span><span>11</span></div><div class="track"><div class="fill" data-w="42"></div></div></div>
+          <div class="bar"><div class="bl"><span>상품·QR·관리자·카탈로그</span><span>8</span></div><div class="track"><div class="fill" data-w="31"></div></div></div>
+        </div>
+      </div>
+      <div class="gap rv">
+        <h4>⌛ 남은 갭 (로직 O, 라우트 X)</h4>
+        <ul>
+          <li><b>업로드 오케스트레이션</b> — /uploads/excel·images·match + upload_jobs 영속화</li>
+          <li><b>POST /auth/register</b> — 가입 라우트</li>
+          <li><b>GET /catalog/export.xlsx</b> — 엑셀출력 서비스는 완성</li>
+          <li><b>런타임</b> — Supabase에 마이그레이션 적용 + .env 설정</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src rv">› source <b>cd backend && pytest -q</b> → 26 passed · <b>16 commits @ v2-dev</b></div>
+  </section>
+
+  <footer>
+    <div class="disp">ezmerce v2 — 코어 엔진 완성</div>
+    <p>requirements → tech-design → plan → build · 26 tests green · branch v2-dev</p>
+  </footer>
+
+</div>
+
+<script>
+  const io = new IntersectionObserver((es)=>{
+    es.forEach((e,i)=>{ if(e.isIntersecting){ setTimeout(()=>e.target.classList.add('in'), (i%6)*70); io.unobserve(e.target);} });
+  },{threshold:.12});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+  // bar fills
+  const bo = new IntersectionObserver((es)=>{
+    es.forEach(e=>{ if(e.isIntersecting){ e.target.querySelectorAll('.fill').forEach(f=>f.style.width=f.dataset.w+'%'); bo.unobserve(e.target);} });
+  },{threshold:.3});
+  document.querySelectorAll('.gauge').forEach(el=>bo.observe(el));
+</script>
+</body>
+</html>
