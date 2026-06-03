@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>요구사항: ezmerce v2 백엔드 (1차 — 상품·권한 코어)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-body: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "맑은 고딕", sans-serif;
+      --color-bg: #f7f7f5;
+      --color-surface: #ffffff;
+      --color-border: #e3e3de;
+      --color-text: #1a1a18;
+      --color-muted: #6b6b65;
+      --color-accent: #2563eb;
+      --color-accent-light: #eff6ff;
+      --color-fr: #1e40af;
+      --color-fr-bg: #eff6ff;
+      --color-fr-border: #bfdbfe;
+      --color-nfr-bg: #f0fdf4;
+      --color-nfr-border: #bbf7d0;
+      --color-nfr: #166534;
+      --color-ac-bg: #fff7ed;
+      --color-ac-border: #fed7aa;
+      --color-ac: #9a3412;
+      --color-out-bg: #fef2f2;
+      --color-out-border: #fecaca;
+      --color-out: #991b1b;
+      --color-notice-bg: #fefce8;
+      --color-notice-border: #fde68a;
+      --color-notice: #92400e;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--color-bg);
+      color: var(--color-text);
+      line-height: 1.75;
+      font-size: 15px;
+      padding: 0 0 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      padding: 40px 0 32px;
+      text-align: center;
+    }
+    header .label {
+      display: inline-block;
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+    }
+    header h1 {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.35;
+      letter-spacing: -.02em;
+      color: var(--color-text);
+      margin-bottom: 8px;
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--color-muted);
+    }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Notice banner ── */
+    .notice {
+      background: var(--color-notice-bg);
+      border: 1px solid var(--color-notice-border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 13.5px;
+      color: var(--color-notice);
+      margin-top: 32px;
+    }
+    .notice strong { font-weight: 700; }
+
+    /* ── Section ── */
+    section {
+      margin-top: 40px;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--color-border);
+    }
+    .section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--color-text);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .section-title h2 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+    }
+
+    /* ── Background / Purpose ── */
+    .bg-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .bg-row {
+      display: flex;
+      gap: 10px;
+    }
+    .bg-key {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      white-space: nowrap;
+      padding-top: 1px;
+      min-width: 68px;
+    }
+    .bg-val {
+      font-size: 14.5px;
+    }
+    .bg-desc {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      font-size: 14.5px;
+      line-height: 1.8;
+      margin-top: 6px;
+      box-shadow: var(--shadow);
+    }
+    .bg-desc strong { font-weight: 700; }
+    .bg-purpose {
+      background: var(--color-accent-light);
+      border: 1px solid var(--color-fr-border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.8;
+      margin-top: 12px;
+      color: #1e3a8a;
+    }
+    .bg-purpose strong { font-weight: 700; }
+
+    /* ── Story list ── */
+    .story-list {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+    .story-item {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.75;
+      box-shadow: var(--shadow);
+    }
+    .story-item strong { color: var(--color-accent); font-weight: 700; }
+
+    /* ── FR group ── */
+    .fr-group {
+      margin-bottom: 28px;
+    }
+    .fr-group-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--color-fr);
+      margin-bottom: 10px;
+      padding: 6px 12px;
+      background: var(--color-fr-bg);
+      border-left: 3px solid var(--color-fr);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .fr-list {
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .fr-item {
+      background: var(--color-surface);
+      border: 1px solid var(--color-fr-border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.75;
+      box-shadow: var(--shadow);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .fr-id {
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      background: var(--color-fr);
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .fr-text { flex: 1; }
+    .fr-text strong { font-weight: 700; }
+
+    /* ── Price table ── */
+    .price-table-wrap {
+      margin-top: 12px;
+      margin-left: 0;
+      overflow-x: auto;
+    }
+    .price-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      background: var(--color-surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .price-table thead tr {
+      background: var(--color-fr);
+      color: #fff;
+    }
+    .price-table th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: .03em;
+    }
+    .price-table tbody tr {
+      border-bottom: 1px solid var(--color-border);
+    }
+    .price-table tbody tr:last-child { border-bottom: none; }
+    .price-table tbody tr:nth-child(even) { background: #f9f9f8; }
+    .price-table td {
+      padding: 10px 14px;
+      vertical-align: middle;
+    }
+    .price-table .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-blue  { background: #dbeafe; color: #1e40af; }
+    .badge-gray  { background: #f3f4f6; color: #374151; }
+    .badge-red   { background: #fee2e2; color: #991b1b; }
+
+    /* ── NFR ── */
+    .nfr-list {
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .nfr-item {
+      background: var(--color-nfr-bg);
+      border: 1px solid var(--color-nfr-border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.75;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      box-shadow: var(--shadow);
+    }
+    .nfr-id {
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      background: var(--color-nfr);
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .nfr-text { flex: 1; }
+    .nfr-text strong { font-weight: 700; }
+
+    /* ── Out of scope ── */
+    .out-list {
+      list-style: none;
+      display: grid;
+      gap: 6px;
+    }
+    .out-item {
+      background: var(--color-out-bg);
+      border: 1px solid var(--color-out-border);
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-size: 13.5px;
+      color: var(--color-out);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .out-item::before {
+      content: "✕";
+      font-size: 11px;
+      font-weight: 800;
+      margin-top: 3px;
+      flex-shrink: 0;
+      opacity: .6;
+    }
+    .out-item strong { font-weight: 700; }
+
+    /* ── AC ── */
+    .ac-list {
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .ac-item {
+      background: var(--color-ac-bg);
+      border: 1px solid var(--color-ac-border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.75;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      box-shadow: var(--shadow);
+    }
+    .ac-id {
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      background: var(--color-ac);
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .ac-text { flex: 1; }
+    .ac-text strong { font-weight: 700; }
+
+    /* ── Change history ── */
+    .history-empty {
+      background: var(--color-surface);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius);
+      padding: 18px 18px;
+      font-size: 13px;
+      color: var(--color-muted);
+      text-align: center;
+    }
+
+    /* ── Divider ── */
+    hr {
+      border: none;
+      border-top: 1px solid var(--color-border);
+      margin: 40px 0 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="label">PRD · 기획 단계 요구사항</div>
+  <h1>요구사항: ezmerce v2 백엔드<br>(1차 — 상품·권한 코어)</h1>
+  <div class="subtitle">ezmerce-v2-backend-requirements.md · 2026-06-03</div>
+</header>
+
+<div class="container">
+
+  <!-- Notice -->
+  <div class="notice">
+    <strong>다음 단계 안내:</strong> 이 문서는 PRD (기획 단계 요구사항만) 입니다. 다음 단계로 <code>tech-design</code> skill (또는 <code>/tech-design</code> 슬래시) 을 호출해서 <code>ezmerce-v2-backend-tech-design.md</code> (기술 설계서) 를 만드세요. DB 스키마/테이블 설계, 인증 방식(Supabase Auth), RLS 정책, API 명세 등 <strong>기술 결정은 여기 박지 말고</strong> 다음 단계에 넣습니다.
+  </div>
+
+  <!-- Section 1 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">1</span>
+      <h2>배경 / 목적</h2>
+    </div>
+    <div class="bg-grid">
+      <div class="bg-row">
+        <span class="bg-key">제품</span>
+        <span class="bg-val">ezmerce — <em>폐쇄형(Closed) B2B 도매 카탈로그 및 주문 관리 솔루션</em></span>
+      </div>
+      <div class="bg-row">
+        <span class="bg-key">고객</span>
+        <span class="bg-val">LALAS (동대문 도매상인연합)</span>
+      </div>
+      <div class="bg-row">
+        <span class="bg-key">마일스톤</span>
+        <span class="bg-val">LALAS LIVE DDP 쇼룸 라이브 일정에 맞춘 <strong>PoC를 방송 2~3일 전 배포</strong>가 1차 데드라인</span>
+      </div>
+    </div>
+    <div class="bg-desc">
+      동대문 도매상은 비정형 엑셀 + 수기 라벨로 상품/거래처를 관리한다. 라이브커머스 셀러는 도매 카탈로그를 받아 방송·판매하지만, 가격/품번/이미지 정보가 업체마다 제각각이라 매칭·공유 리소스가 크다. ezmerce는 <strong>사전 승인된 사용자(도매업체·소매셀러·에이전시)만 접근하는 폐쇄형 환경</strong>에서, 도매 상품을 한 번 등록하면 ① 표준화된 카탈로그로 셀러에게 공유되고 ② QR/엑셀로 오프라인 출력까지 연결되는 <strong>데이터 통합 + 권한 제어 기반 시스템</strong>을 만든다.
+    </div>
+    <div class="bg-purpose">
+      <strong>1차(본 PRD)의 목적:</strong> 향후 영업·도입의 기반이 되는 <strong>코어 엔진</strong> — (1) 상품 데이터 업로드/관리, (2) QR·엑셀 출력 자동화, (3) 역할 기반 폐쇄형 카탈로그 + 가격 차등 노출 — 을 완성한다.
+    </div>
+  </section>
+
+  <!-- Section 2 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">2</span>
+      <h2>사용자 스토리 / 시나리오</h2>
+    </div>
+    <ul class="story-list">
+      <li class="story-item"><strong>도소매 관리자(Admin)</strong>로서, 도매업체·소매셀러·에이전시의 가입을 <strong>승인/거절/삭제</strong>하여 폐쇄형 네트워크를 관리하고 싶다. (관리자 계정은 에이전시 또는 LALAS 연합 리더에게 제공)</li>
+      <li class="story-item"><strong>도매업체(Wholesaler)</strong>로서, 기존 POS에서 뽑은 상품 데이터를 <strong>표준 엑셀 템플릿 + 이미지로 대량 업로드</strong>하고, 등록된 상품을 수정/삭제/보관하고 싶다.</li>
+      <li class="story-item"><strong>도매업체</strong>로서, 등록 상품을 <strong>QR이 박힌 엑셀로 출력</strong>해서 별도 폼텍 라벨 작업 없이 오프라인에 쓰고 싶다.</li>
+      <li class="story-item"><strong>소매 셀러(라이브커머스 셀러)</strong>로서, 로그인하면 <strong>승인된 나에게만 열린 카탈로그</strong>에서 상품을 보고, 내 계약 조건에 맞는 <strong>도매가</strong>를 확인하고, 셀러용 엑셀로 받고 싶다.</li>
+      <li class="story-item"><strong>에이전시(Agency)</strong>로서, 카탈로그에서 <strong>판매가</strong>를 기준으로 상품을 보고 싶다. <em>(1차에는 에이전시 실제 운영은 하지 않으나 역할/권한 구조는 준비)</em></li>
+      <li class="story-item"><strong>소비자/현장 스태프</strong>로서, 상품 <strong>QR을 스캔하면 인스타그램 비율의 모바일 카드</strong>로 제품 정보를 보고 싶다.</li>
+    </ul>
+  </section>
+
+  <!-- Section 3 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">3</span>
+      <h2>기능 요구사항 (FR)</h2>
+    </div>
+
+    <!-- FR-1 -->
+    <div class="fr-group">
+      <div class="fr-group-title">FR-1. 계정·역할 (RBAC) 및 폐쇄형 접근</div>
+      <ul class="fr-list">
+        <li class="fr-item">
+          <span class="fr-id">FR-1.1</span>
+          <span class="fr-text">4개 역할로 계정을 분리하고 역할별 권한을 제어한다 — <strong>도소매 관리자(Admin)</strong>, <strong>도매업체(Wholesaler)</strong>, <strong>소매 셀러(Retail Seller, =라이브커머스 셀러)</strong>, <strong>에이전시(Agency)</strong>.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-1.2</span>
+          <span class="fr-text">소매 셀러는 하위 유형을 가진다 — <strong>에이전시 소속 셀러</strong> / <strong>개인 셀러</strong>. (가격 노출 규칙의 기준이 됨)</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-1.3</span>
+          <span class="fr-text">사전 승인된 계정만 시스템에 접근할 수 있다. 관리자가 가입 요청을 <strong>승인/거절/삭제</strong>한다. 미승인·비로그인 사용자는 카탈로그에 접근할 수 없다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-1.4</span>
+          <span class="fr-text">사용자는 로그인/인증을 거쳐야 하며, 모든 데이터 접근·가격 노출은 인증된 역할을 기준으로 <strong>서버에서 결정</strong>된다.</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- FR-2 -->
+    <div class="fr-group">
+      <div class="fr-group-title">FR-2. 상품 등록 및 관리 (CRUD)</div>
+      <ul class="fr-list">
+        <li class="fr-item">
+          <span class="fr-id">FR-2.1</span>
+          <span class="fr-text">도매업체는 상품을 <strong>단건 등록</strong>할 수 있다. 항목: 품번, 상품명, 색상/사이즈 등 옵션, 도매가/판매가, 소재(혼용률), 원산지, 작업기간, 설명, 대표 이미지, 품절 여부.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-2.2</span>
+          <span class="fr-text">도매업체는 <strong>표준 엑셀 템플릿</strong>으로 상품을 <strong>대량 등록(Bulk)</strong>하고, 상품 <strong>이미지를 대량 업로드</strong>할 수 있다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-2.3</span>
+          <span class="fr-text">업로드 시 엑셀 행 ↔ 이미지 파일을 <strong>품번/이미지명 기준으로 자동 매칭</strong>하고, 매칭 실패·누락 건은 <strong>사용자가 수작업으로 매칭하는 보조 인터페이스</strong>를 제공한다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-2.4</span>
+          <span class="fr-text">등록된 상품을 <strong>수정/삭제/보관(Archive)</strong> 할 수 있다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-2.5</span>
+          <span class="fr-text"><strong>품번 정규화</strong> — 여러 도매업체의 상품이 섞여도 충돌하지 않도록, 플랫폼이 상품에 <strong>자체 식별자</strong>를 부여한다. (업체별 원본 품번은 함께 보존)</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- FR-3 -->
+    <div class="fr-group">
+      <div class="fr-group-title">FR-3. 엑셀 출력</div>
+      <ul class="fr-list">
+        <li class="fr-item">
+          <span class="fr-id">FR-3.1</span>
+          <span class="fr-text">셀러/도매업체가 상품 정보를 <strong>지정된 엑셀 포맷으로 다운로드</strong>할 수 있다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-3.2</span>
+          <span class="fr-text">엑셀 다운로드 시 <strong>최우측 열에 상품별 QR 코드가 이미지로 자동 삽입</strong>된다. (별도 폼텍 라벨 출력 과정 대체)</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- FR-4 -->
+    <div class="fr-group">
+      <div class="fr-group-title">FR-4. QR 코드</div>
+      <ul class="fr-list">
+        <li class="fr-item">
+          <span class="fr-id">FR-4.1</span>
+          <span class="fr-text">상품 등록 시 <strong>상품별 개별 QR 코드가 자동 생성</strong>된다.</span>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-4.2</span>
+          <span class="fr-text">QR 스캔 시 <strong>인스타그램 비율의 모바일 카드 형태 제품 정보 페이지</strong>가 노출된다.</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- FR-5 -->
+    <div class="fr-group">
+      <div class="fr-group-title">FR-5. 폐쇄형 권한 카탈로그 뷰 + 가격 차등 노출</div>
+      <ul class="fr-list">
+        <li class="fr-item">
+          <span class="fr-id">FR-5.1</span>
+          <span class="fr-text">사전 승인된 <strong>소매 셀러·에이전시만 접근 가능한 전체 상품 카탈로그 뷰</strong>를 제공한다.</span>
+        </li>
+        <li class="fr-item" style="flex-direction: column; gap: 10px;">
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <span class="fr-id">FR-5.2</span>
+            <span class="fr-text">역할/유형에 따라 가격을 <strong>차등 노출</strong>한다 (서버에서 결정, 클라이언트 신뢰 금지):</span>
+          </div>
+          <div class="price-table-wrap">
+            <table class="price-table">
+              <thead>
+                <tr>
+                  <th>역할 / 유형</th>
+                  <th>노출 가격</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>계약된 소매 셀러(라이브셀러) — 개인 셀러</td>
+                  <td><span class="badge badge-green">도매가</span></td>
+                </tr>
+                <tr>
+                  <td>에이전시</td>
+                  <td><span class="badge badge-blue">판매가</span></td>
+                </tr>
+                <tr>
+                  <td>에이전시 소속 셀러</td>
+                  <td><span class="badge badge-gray">가격 미노출 (제품 정보만)</span></td>
+                </tr>
+                <tr>
+                  <td>미승인 / 비로그인</td>
+                  <td><span class="badge badge-red">접근 불가</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </li>
+        <li class="fr-item">
+          <span class="fr-id">FR-5.3</span>
+          <span class="fr-text">카탈로그에서 FR-3의 셀러용 엑셀(QR 포함) 다운로드로 연결된다.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Section 4 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">4</span>
+      <h2>비기능 요구사항 (NFR)</h2>
+    </div>
+    <ul class="nfr-list">
+      <li class="nfr-item">
+        <span class="nfr-id">NFR-1</span>
+        <span class="nfr-text"><strong>데이터 정합성:</strong> 품번 충돌이 발생하지 않아야 한다. 상품 마스터와 옵션(색상/사이즈)·가격·재고를 분리해 옵션 단위로 관리한다.</span>
+      </li>
+      <li class="nfr-item">
+        <span class="nfr-id">NFR-2</span>
+        <span class="nfr-text"><strong>보안/폐쇄성:</strong> 가격 노출은 반드시 <strong>서버 측에서 역할 기준으로 결정</strong>한다. 미승인/비로그인 접근은 차단한다.</span>
+      </li>
+      <li class="nfr-item">
+        <span class="nfr-id">NFR-3</span>
+        <span class="nfr-text"><strong>성능:</strong> 카탈로그 조회는 <strong>페이지네이션</strong>으로 처리하고, 대량 업로드는 수백 건 규모를 한 번에 처리할 수 있어야 한다. <em>(구체 수치는 tech-design에서 확정)</em></span>
+      </li>
+      <li class="nfr-item">
+        <span class="nfr-id">NFR-4</span>
+        <span class="nfr-text"><strong>배포 가능성:</strong> PoC는 <strong>라이브 방송 2~3일 전 배포</strong> 가능한 수준으로 범위를 통제한다.</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Section 5 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">5</span>
+      <h2>범위 밖 (Out of Scope) — 1차 제외</h2>
+    </div>
+    <ul class="out-list">
+      <li class="out-item">주문/발주 자동 라우팅 (Phase 2)</li>
+      <li class="out-item">배송 현황 실시간 동기화 대시보드 / 그리드형 통합 관리 UI (Phase 2)</li>
+      <li class="out-item">정산·미송 원장(Ledger) 시스템 (후순위)</li>
+      <li class="out-item">구독 결제·PG 연동 (Phase 3, 미정)</li>
+      <li class="out-item">통합 채팅 라우팅 / AI 에이전트 (Phase 3, 미정)</li>
+      <li class="out-item">초대 전용(Invite Token) 기능 (후순위)</li>
+      <li class="out-item"><strong>비정형 엑셀 자동 파싱</strong> (1차는 표준 템플릿만, 자동 파싱은 다음 단계)</li>
+      <li class="out-item"><strong>일반(비라이브) 소매업체 대상</strong> (1차는 라이브커머스 셀러만)</li>
+      <li class="out-item"><strong>에이전시 실제 운영</strong> (역할/권한/데이터 모델만 준비, 당장 운영 X)</li>
+      <li class="out-item">의미 검색 / 다국어 AI 검색 (v1 비전, 1차 제외)</li>
+    </ul>
+  </section>
+
+  <!-- Section 6 -->
+  <section>
+    <div class="section-title">
+      <span class="section-num">6</span>
+      <h2>수용 기준 (Acceptance Criteria)</h2>
+    </div>
+    <ul class="ac-list">
+      <li class="ac-item">
+        <span class="ac-id">AC-1</span>
+        <span class="ac-text">도매업체가 표준 엑셀 템플릿 + 이미지를 업로드하면, 상품이 옵션(색상/사이즈)·도매가/판매가와 함께 등록되고 <strong>품번 충돌이 발생하지 않는다</strong>.</span>
+      </li>
+      <li class="ac-item">
+        <span class="ac-id">AC-2</span>
+        <span class="ac-text">엑셀↔이미지 매칭 실패 건이 있을 때 <strong>수작업 매칭 UI로 보정</strong>한 뒤 정상 등록된다.</span>
+      </li>
+      <li class="ac-item">
+        <span class="ac-id">AC-3</span>
+        <span class="ac-text">등록된 모든 상품에 <strong>QR이 자동 생성</strong>되고, 스캔 시 모바일 카드 페이지가 열린다.</span>
+      </li>
+      <li class="ac-item">
+        <span class="ac-id">AC-4</span>
+        <span class="ac-text">엑셀 다운로드 시 <strong>최우측 열에 QR 이미지가 삽입</strong>되어 받아진다.</span>
+      </li>
+      <li class="ac-item">
+        <span class="ac-id">AC-5</span>
+        <span class="ac-text">라이브셀러(개인)로 로그인 → 카탈로그에서 <strong>도매가</strong>가 보인다 / 에이전시로 로그인 → <strong>판매가</strong>가 보인다 / 에이전시 소속 셀러 → <strong>가격이 보이지 않는다</strong>.</span>
+      </li>
+      <li class="ac-item">
+        <span class="ac-id">AC-6</span>
+        <span class="ac-text"><strong>미승인 계정은 카탈로그에 접근할 수 없다</strong>. 관리자가 승인하면 접근 가능해진다.</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Change History -->
+  <hr />
+  <section>
+    <div class="section-title" style="margin-top: 32px;">
+      <span class="section-num" style="background:#9ca3af;">H</span>
+      <h2>변경이력</h2>
+    </div>
+    <div class="history-empty">변경이력 없음 (change-history skill이 자동 추가합니다)</div>
+  </section>
+
+</div>
+</body>
+</html>
