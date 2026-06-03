@@ -1,7 +1,7 @@
 # HANDOFF — ezmerce v2 백엔드 (1차)
 
 > 새 세션은 이 파일 경로만 주고 시작하면 됩니다: `HANDOFF.md`
-> 작성 시점: 2026-06-03 / 브랜치: **`v2-dev`** (feature/dev 기준 38 commits) / 테스트: **36 passed**
+> 최종 갱신: 2026-06-04 / 브랜치: **`v2-dev`** / 테스트: **58 passed** / 비즈니스 라우트 **16개**(+health)
 
 ## 🎯 Goal
 **ezmerce** = 폐쇄형 B2B 도매 카탈로그·주문 솔루션 (고객: **LALAS** 동대문 도매상인연합).
@@ -10,10 +10,14 @@
 프로젝트 규칙: 루트 **`CLAUDE.md`** (DB 삭제 정책·레이어 규칙 등 — 꼭 읽기).
 
 ## ✅ Current Progress (된 것)
-- **백엔드 전체 구현 + 36 tests 통과** (`cd backend && .venv/bin/python -m pytest`). 단위테스트는 fake repo 기반이라 라이브 DB 없이 통과.
-- **DB 스키마 라이브 적용 완료** — Supabase 프로젝트(`ezjgnmbuheheytcyibmx`)에 v1 리셋 후 v2 적용. **7개 테이블 + 핵심 컬럼 REST로 검증됨**(v1 잔재 0).
-- 라우터(14 routes): `/health`, `/admin/accounts(+approve/reject/price-visibility)`, `/products(+PATCH/DELETE)`, `/catalog`, `/p/{code}`, `/qr/{code}.png`.
-- js-super 파이프라인 산출물(요구사항→설계→계획) + 변경이력 CH-001~019 누적.
+- **백엔드 전체 구현 + 58 tests 통과** (`cd backend && .venv/bin/python -m pytest`). 단위테스트는 fake repo 기반이라 라이브 DB 없이 통과. uvicorn 부팅 스모크 OK(/health 200, OpenAPI 16라우트).
+- **DB 스키마 라이브 적용 완료** — Supabase 프로젝트(`ezjgnmbuheheytcyibmx`)에 v1 리셋 후 v2 적용. **7개 테이블 + 핵심 컬럼 REST로 검증됨**(v1 잔재 0). ⚠️ **단 `_05`(platform_code RPC)는 아직 미적용** — 라이브 RPC 호출이 404(아래 Next Steps 1).
+- **갭 엔드포인트 3그룹 완성**(이전 세션 §4 미구현분):
+  - `GET /catalog/export.xlsx` — 역할별 가격 셰이핑 + QR 삽입 엑셀 다운로드 (CH-020)
+  - `POST /auth/register` — 백엔드 회원가입(자가가입 retail_seller/agency 화이트리스트, status=pending, price_visibility 시드) (CH-021)
+  - `POST /uploads/excel`·`/images`·`GET /{job}/unmatched`·`POST /{job}/match` + upload_jobs 영속화 (CH-022)
+- 라우터(16 routes): `/health`, `/auth/register`, `/admin/accounts(+approve/reject/price-visibility)`, `/products(+PATCH/DELETE)`, `/catalog(+export.xlsx)`, `/p/{code}`, `/qr/{code}.png`, `/uploads/{excel,images,{job}/unmatched,{job}/match}`.
+- js-super 파이프라인 산출물(요구사항→설계→계획) + 변경이력 CH-001~022 누적.
 
 ### 핵심 설계 결정 (이번 세션에서 확정 — 다 반영됨)
 1. **도매업체 ≠ 에이전시 = 별도 테이블** (`wholesalers`/`agencies`). `organizations+type` 단일테이블 폐기. `products.wholesaler_id`는 도매만 가리킴(타입안전).
@@ -37,20 +41,15 @@
 - **`platform_code.next_platform_code` 가 `rpc("nextval", ...)` 호출** → PostgREST로 호출 불가(pg_catalog 함수). **`public.next_platform_seq()` RPC(`_05`)로 교체 완료**. ⬅️ 단, **`_05` 마이그레이션은 아직 SQL Editor에서 실행 안 됨!** (Next Steps 참고)
 
 ## 🔜 Next Steps (이어서 할 일)
-1. **[즉시] `_05` 마이그레이션 실행** — `backend/migrations/2026-06-03_v2_core_05_platform_code_fn.sql`을 Supabase SQL Editor에 붙여 실행. (안 하면 상품 등록 시 platform_code 발급 실패)
-   - 실행 후 RPC 동작 확인: 서비스키로 `POST {SUPABASE_URL}/rest/v1/rpc/next_platform_seq` → 숫자 반환되면 OK.
-2. **엔드포인트 동작 확인** (사용자 요청) — `cd backend && .venv/bin/uvicorn app.main:app --reload` → `/docs`(Swagger)로 확인. 라이브 DB 연결됨. (단위테스트는 이미 green, 여기선 실제 Supabase 연동 동작 검증)
-   - 스모크: wholesaler 1행 insert → profile(role=wholesaler, wholesaler_id) → 상품 등록 → platform_code/updated_at 트리거/soft delete cascade 동작 확인.
-3. **갭 엔드포인트 빌드** (사용자가 선택한 방향, TDD/fake repo로 DB없이도 가능):
-   - `POST /auth/register` — Supabase Auth 가입 후 `profiles`(status=pending) 생성. **추천: 백엔드 엔드포인트 방식**(role/seller_type 받아 service key로 insert).
-   - `GET /catalog/export.xlsx` — `excel_export` 서비스 이미 있음, 라우트만.
-   - `POST /uploads/excel`·`/uploads/images`·`GET /uploads/{job}/unmatched`·`POST /uploads/{job}/match` + `upload_jobs` 영속화. (`excel_parse`·`image_match` 로직 완성됨)
-4. **이미지 스토리지 결정/구현** — `product_images.storage_path` = Supabase Storage 버킷(`product-images`). **추천: v1처럼 프론트가 Storage 직접 업로드**, 백엔드는 경로 기록+매칭. 버킷+RLS 생성 필요(아직 없음).
-5. (이후) 프론트(apps/web·mobile) ↔ FastAPI 연동, Phase 2(주문/배송).
+1. **[즉시·사용자] `_05` 마이그레이션 실행** — `backend/migrations/2026-06-03_v2_core_05_platform_code_fn.sql`을 Supabase SQL Editor에 붙여 실행. (안 하면 상품 등록/엑셀 업로드 시 platform_code 발급 실패) — DDL이라 서비스키로 실행 불가(안전장치).
+   - 검증: 서비스키로 `POST {SUPABASE_URL}/rest/v1/rpc/next_platform_seq` → 숫자 반환되면 OK. (현재 404 = 미적용)
+2. **라이브 스모크 검증** (`_05` 실행 후) — 서비스키로 wholesaler 1행 → 상품 등록(platform_code 발급) → skus → updated_at 트리거/soft-cascade 동작 확인 후 정리(soft delete). ※ 라이브 DB 쓰기라 실행 전 동의 필요.
+3. **[사용자] `product-images` Storage 버킷 + RLS 생성** — 이미지 업로드 모델=프론트 직접 Storage(확정). 버킷 생성(비공개) + storage.objects RLS(SQL Editor). 실제 프론트 이미지 업로드 전까지는 미사용이라 급하진 않음.
+4. (이후) 프론트(apps/web·mobile) ↔ FastAPI 연동, Phase 2(주문/배송).
 
-## 미해결 결정 (다음 세션에서 확정 필요)
-- 회원가입 profiles 생성: 백엔드 `/auth/register`(추천) vs DB 트리거(auth.users→profiles).
-- 이미지 업로드: 프론트 직접 Storage(추천, v1 방식) vs 백엔드 프록시(multipart).
+## 확정된 결정 (이번 세션)
+- 회원가입 = **백엔드 `/auth/register`** (자가가입 role 화이트리스트로 권한상승 차단). → CH-021
+- 이미지 업로드 = **프론트 직접 Storage** (v1 방식, 백엔드는 경로 기록+품번 자동매칭). → CH-022
 
 ## 참고 위치
 - 마이그레이션 + 실행순서: `backend/migrations/README.md` (리셋 `_RESET_public.sql` → `_v2_core` → `_02` → `_03` → `_04` → `_05`)
