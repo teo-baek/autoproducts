@@ -274,6 +274,14 @@ hard `DELETE` 금지. 전 테이블 `deleted_at TIMESTAMPTZ`(NULL=살아있음),
 - **archived ≠ deleted**: `status='archived'`(진열 내림)와 `deleted_at`(제거)는 별개 개념.
 - 마이그레이션: `_03_soft_delete.sql`. 규칙 요약은 프로젝트 루트 `CLAUDE.md` → DB 규칙.
 
+### 3.13 감사 컬럼 (NFR-6)
+
+핵심 도메인 테이블에 "누가/언제" 흔적:
+- `created_by` / `updated_by` (FK → profiles, ON DELETE SET NULL) — 행위자. **앱이 인증 사용자 id로 채움**(service role이라 DB가 행위자를 모름).
+- `created_at` / `updated_at` — 시각. `updated_at`은 BEFORE UPDATE 트리거 `set_updated_at()`로 전 테이블 자동 갱신.
+- 기존 `profiles.approved_by`, `upload_jobs.created_by`는 유지(중복 추가 X).
+- 마이그레이션: `_04_audit.sql`. 1차 wiring은 products 경로(register=created_by, patch/delete=updated_by). 나머지 테이블 wiring은 후속.
+
 ## 4. 외부 인터페이스 (API 윤곽)
 
 > 상세 요청/응답 스키마는 write-plan에서 확정. 1차 엔드포인트 윤곽만.
@@ -317,6 +325,7 @@ backend/
 5. **wholesalers / agencies 테이블 분리** (vs 단일 organizations+type). 채택: 도매업체(상품 소유)와 에이전시(셀러 관리)는 다른 주체 + 관계·향후 기능(에이전시 슈퍼관리자/정산 vs 도매 주문/배송)이 발산 → FK 타입 안전(`products.wholesaler_id`→`wholesalers`만) + 의도 명확. `profiles`는 `wholesaler_id`/`agency_id`로 소속 구분.
 6. **이미지 매칭 = product_images(match_status) + upload_jobs 영속화**. 대안(업로드 시 인메모리 매칭) 기각: 수작업 매칭 UI에 영속 상태 필요.
 7. **soft delete 전면 채택** (vs hard DELETE). `deleted_at`만(boolean 미사용), 부분 유니크 + soft-cascade 트리거로 CASCADE 대체. 채택: B2B 감사·복구·과거 참조 보존. 대안(hard delete) 기각: 복구 불가·참조 깨짐.
+8. **감사 컬럼 created_by/updated_by + updated_at 트리거**. 행위자는 앱이 채우고 updated_at은 DB 트리거 자동. 대안(별도 audit-log 테이블) 보류: 1차엔 컬럼 수준으로 충분, 전체 변경이력이 필요해지면 Phase에서 도입.
 
 ## 7. 예비 위험
 
@@ -366,3 +375,10 @@ backend/
 - **무엇이**: §3.12 소프트 삭제 정책 신설, §3.11 RLS products 정책에 `deleted_at IS NULL` 추가, §6 핵심결정-7
 - **영향범위**: code(migration _03 — deleted_at 전 테이블, 부분 유니크, soft-cascade 트리거, RLS), 루트 CLAUDE.md
 - **연관 항목**: CH-20260603-010 (요구사항), CH-20260603-012 (코드)
+
+### [2026-06-03 22:15] [개발방향-수정]
+- **id**: CH-20260603-016
+- **이유**: NFR-6 감사 추적 반영
+- **무엇이**: §3.13 감사 컬럼(created_by/updated_by/updated_at + set_updated_at 트리거), §6 핵심결정-8
+- **영향범위**: code(migration _04, entity models, products 경로 wiring)
+- **연관 항목**: CH-20260603-015 (요구사항), CH-20260603-017 (코드)

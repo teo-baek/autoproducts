@@ -1400,3 +1400,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **영향범위**: move/additive — 동작 무변경, **35 passed**. 사용처는 test_entities.py뿐이라 안전.
 - **위험 카테고리**: none
 - **연관 항목**: CH-20260603-013 (엔티티 모델 최초 추가)
+
+### [2026-06-03 22:15] [코드-수정] (감사 컬럼 + 루트 uv 정리)
+- **id**: CH-20260603-017
+- **이유**: created_by/updated_by + updated_at 자동갱신(핵심 도메인) 도입, 루트 Streamlit 시절 uv 잔재 정리
+- **무엇이**: migrations/2026-06-03_v2_core_04_audit.sql(신규 — 감사 컬럼 + set_updated_at 트리거 7테이블), app/entities/models.py(감사 필드 추가), app/services/products.py + app/routers/products.py(register→created_by, patch/delete→updated_by wiring), tests/test_products_service.py·test_product_archive.py(감사 assert); **루트 pyproject.toml/uv.lock/requirements.txt 삭제**(Python 프로젝트는 backend 단독)
+- **영향범위**: 앱 14 라우트 정상, **35 passed**. created_by/updated_by FK→profiles, updated_at 트리거 전 테이블. 루트 Python 매니페스트 제거.
+- **위험 카테고리**: side-effect (updated_at 트리거), breaking (루트 deps 매니페스트 제거 — backend로 일원화됨)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-015 (요구사항), CH-20260603-016 (개발방향)
