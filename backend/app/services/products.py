@@ -1,0 +1,25 @@
+from app.schemas.product import ProductCreate
+
+
+def register_product(repo, org_id: str, payload: ProductCreate) -> dict:
+    code = repo.next_platform_code()
+    product = repo.insert_product({
+        "wholesaler_org_id": org_id,
+        "platform_code": code,
+        "source_p_number": payload.source_p_number,
+        "item_name": payload.item_name,
+        "fabric_composition": payload.fabric_composition,
+        "origin": payload.origin,
+        "lead_time_days": payload.lead_time_days,
+        "description": payload.description,
+    })
+    repo.insert_skus([{**s.model_dump(), "product_id": product["id"]} for s in payload.skus])
+    return product
+
+
+def update_product(repo, product_id: str, patch: dict) -> dict:
+    return repo.update_product(product_id, patch)
+
+
+def archive_product(repo, product_id: str) -> dict:
+    return repo.update_product(product_id, {"status": "archived"})
