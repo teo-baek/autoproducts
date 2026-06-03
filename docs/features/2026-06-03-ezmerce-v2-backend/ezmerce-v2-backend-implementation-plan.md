@@ -1436,3 +1436,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: security (자가가입 role 화이트리스트로 권한상승 차단), breaking 아님
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260604-020 (직전 갭 작업), 계획 Task 6(가입+승인), 미해결결정(가입 방식=백엔드 확정)
+
+### [2026-06-04 00:55] [코드-수정] (갭 C: uploads 오케스트레이션 + upload_jobs 영속화, Task 10/11 잔여)
+- **id**: CH-20260604-022
+- **이유**: 계획 §4 미구현 갭 — excel_parse·image_match 순수로직은 있으나 라우트/영속화 미연결. 이미지 업로드 모델=프론트 직접 Storage 채택(사용자 결정).
+- **무엇이**: app/services/uploads.py(신규 — ingest_excel 품번별 그룹핑·상품일괄생성·job 기록, attach_images 파일명 자동매칭+job 갱신, list_unmatched, resolve_match 수동매칭, UploadError), app/schemas/upload.py(신규 — ImageItem/AttachImagesRequest/MatchRequest DTO), app/routers/uploads.py(신규 — POST /uploads/excel(multipart)·/images(json), GET /{job}/unmatched, POST /{job}/match, SupabaseUploadRepo, wholesaler 가드), app/main.py(uploads 라우터 등록), tests(신규 12: service 8 + routes 4), pyproject/uv.lock(python-multipart 추가), requirements.txt(uv export 재생성)
+- **영향범위**: 업로드 경로. **58 passed**(+12). 라우트 16개(+health). product_images엔 upload_job_id 없음 → unmatched는 wholesaler 스코프 조회(v1 단순화). 엑셀은 multipart 서버파싱, 이미지는 프론트 Storage 직접 업로드 후 매니페스트 전달. gotrue/Storage 라이브 스모크 미검증(RISK).
+- **위험 카테고리**: scale(대량 이미지), side-effect(상품 일괄생성), breaking 아님
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260604-021 (직전 갭 작업), 계획 Task 10(엑셀파서)·Task 11(이미지매칭), 미해결결정(이미지 업로드=프론트 직접 Storage 확정)

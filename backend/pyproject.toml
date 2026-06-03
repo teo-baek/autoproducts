@@ -12,6 +12,7 @@ dependencies = [
     "qrcode>=8.2",
     "pillow>=12.2",
     "openpyxl>=3.1",
+    "python-multipart>=0.0.30",
 ]
 
 [tool.uv]

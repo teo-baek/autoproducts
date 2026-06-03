@@ -1,0 +1,152 @@
+import openpyxl
+import pytest
+from app.services.uploads import (
+    ingest_excel, attach_images, resolve_match, list_unmatched, UploadError,
+)
+
+
+class FakeUploadRepo:
+    def __init__(self):
+        self.products = []; self.skus = []; self.jobs = []; self.images = []
+        self.seq = 0; self._pmap = {}
+
+    def next_platform_code(self):
+        self.seq += 1; return f"EZM-{self.seq:06d}"
+
+    def insert_product(self, d):
+        d = {**d, "id": f"p{len(self.products) + 1}"}
+        self.products.append(d); self._pmap[d["source_p_number"]] = d["id"]; return d
+
+    def insert_skus(self, rows):
+        self.skus.extend(rows); return rows
+
+    def create_upload_job(self, d):
+        d = {**d, "id": "job-1"}; self.jobs.append(d); return d
+
+    def update_upload_job(self, jid, patch):
+        for j in self.jobs:
+            if j["id"] == jid: j.update(patch); return j
+        return {"id": jid, **patch}
+
+    def get_upload_job(self, jid):
+        return next((j for j in self.jobs if j["id"] == jid), {"id": jid, "wholesaler_id": "w1"})
+
+    def products_pnum_map(self, wid):
+        return dict(self._pmap)
+
+    def insert_images(self, rows):
+        out = []
+        for r in rows:
+            r = {**r, "id": f"img{len(self.images) + 1}"}; self.images.append(r); out.append(r)
+        return out
+
+    def list_unmatched_images(self, wid):
+        return [i for i in self.images if i["match_status"] == "unmatched"]
+
+    def update_image(self, iid, patch):
+        for i in self.images:
+            if i["id"] == iid: i.update(patch); return i
+        return {"id": iid, **patch}
+
+
+def _make_xlsx(path, rows):
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "도매가", "판매가"])
+    for r in rows:
+        ws.append(r)
+    wb.save(path)
+
+
+def test_ingest_excel_groups_rows_into_products_and_skus(tmp_path):
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [
+        ("1001", "린넨셔츠", "화이트", "F", 12000, 29000),
+        ("1001", "린넨셔츠", "블랙", "F", 12000, 29000),   # 같은 품번 → 같은 상품, sku 추가
+        ("1002", "데님", "인디고", "M", 20000, 45000),
+    ])
+    repo = FakeUploadRepo()
+    out = ingest_excel(repo, "w1", str(p), created_by="staff-1")
+    assert len(out["products"]) == 2            # 품번 2종 → 상품 2개
+    assert len(repo.skus) == 3                  # sku 3행
+    assert out["job"]["status"] == "needs_matching"
+    assert out["job"]["total_rows"] == 3
+    assert repo.products[0]["created_by"] == "staff-1"
+
+
+def test_ingest_excel_records_parse_errors(tmp_path):
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [
+        ("1001", "정상", "화이트", "F", 12000, 29000),
+        ("", "품번없음", "블랙", "F", 12000, 29000),       # 필수값 누락 → error
+        ("1003", "가격이상", "레드", "F", "NOTNUM", 29000),  # 도매가 정수변환 실패 → error
+    ])
+    repo = FakeUploadRepo()
+    out = ingest_excel(repo, "w1", str(p))
+    assert len(out["products"]) == 1
+    assert out["job"]["error_rows"] == 2
+    assert len(out["errors"]) == 2
+
+
+def test_ingest_excel_no_valid_rows_marks_failed(tmp_path):
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [("", "x", "화이트", "F", 12000, 29000)])
+    out = ingest_excel(FakeUploadRepo(), "w1", str(p))
+    assert out["products"] == []
+    assert out["job"]["status"] == "failed"
+
+
+def test_attach_images_matches_by_filename_and_updates_job():
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    out = attach_images(repo, "job-1", [
+        {"original_filename": "1001_front.jpg", "storage_path": "w1/1001_front.jpg"},
+        {"original_filename": "9999.jpg", "storage_path": "w1/9999.jpg"},
+    ], created_by="staff-1")
+    assert out["matched"] == ["1001_front.jpg"]
+    assert out["unmatched"] == ["9999.jpg"]
+    assert any(i["match_status"] == "matched" and i["product_id"] == "p1" for i in repo.images)
+    job = repo.get_upload_job("job-1")
+    assert job["matched_rows"] == 1
+    assert job["status"] == "needs_matching"     # 미매칭 잔존 → 계속 매칭 대기
+
+
+def test_attach_images_all_matched_completes_job():
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    attach_images(repo, "job-1", [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}])
+    assert repo.get_upload_job("job-1")["status"] == "completed"
+
+
+def test_resolve_match_links_image_to_product():
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    repo.insert_images([{"wholesaler_id": "w1", "storage_path": "w1/x.jpg",
+                         "original_filename": "x.jpg", "product_id": None, "match_status": "unmatched"}])
+    out = resolve_match(repo, "job-1", image_id="img1", source_p_number="1001")
+    assert out["product_id"] == "p1" and out["match_status"] == "matched"
+
+
+def test_resolve_match_unknown_pnum_raises():
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    with pytest.raises(UploadError):
+        resolve_match(repo, "job-1", image_id="img1", source_p_number="NOPE")
+
+
+def test_list_unmatched_returns_only_unmatched():
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_images([
+        {"wholesaler_id": "w1", "storage_path": "a", "original_filename": "a.jpg",
+         "product_id": None, "match_status": "unmatched"},
+        {"wholesaler_id": "w1", "storage_path": "b", "original_filename": "b.jpg",
+         "product_id": "p1", "match_status": "matched"},
+    ])
+    out = list_unmatched(repo, "job-1")
+    assert len(out) == 1 and out[0]["original_filename"] == "a.jpg"

@@ -123,6 +123,8 @@ python-dateutil==2.9.0.post0
     # via strictyaml
 python-dotenv==1.2.2
     # via pydantic-settings
+python-multipart==0.0.30
+    # via ezmerce-backend
 qrcode==8.2
     # via ezmerce-backend
 realtime==2.30.1
