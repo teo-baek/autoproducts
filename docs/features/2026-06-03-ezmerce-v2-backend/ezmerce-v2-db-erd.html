@@ -21,7 +21,7 @@
   header{padding:64px 0 26px}
   .kick{font-family:var(--mono);font-size:12px;letter-spacing:5px;color:var(--gold);text-transform:uppercase;margin-bottom:16px}
   h1{font-family:var(--disp);font-size:clamp(34px,6vw,60px);line-height:1}
-  h1 .s{display:block;font-size:clamp(16px,2.6vw,22px);color:var(--muted);margin-top:12px;letter-spacing:.5px}
+  h1 .s{display:block;font-size:clamp(15px,2.6vw,21px);color:var(--muted);margin-top:12px;letter-spacing:.5px}
   .lead{max-width:680px;margin-top:18px;color:var(--muted);font-size:15.5px}
   section{padding:34px 0;border-top:1px solid var(--line)}
   .tag{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:16px}
@@ -32,22 +32,33 @@
   .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--muted)}
   .legend b{color:var(--txt);font-weight:500}
   .legend .pk{color:var(--gold)} .legend .fk{color:var(--teal)} .legend .nw{color:var(--rose)}
+
+  /* 공통 컬럼 callout */
+  .common{margin-top:18px;background:linear-gradient(160deg,var(--panel),var(--ink2));border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:13px;padding:16px 18px}
+  .common h4{font-family:var(--mono);font-size:13px;color:var(--ok);letter-spacing:1px;margin-bottom:10px}
+  .common .cc{display:flex;flex-wrap:wrap;gap:8px}
+  .common .cc span{font-family:var(--mono);font-size:11.5px;background:var(--ink2);border:1px solid var(--line);border-radius:7px;padding:5px 10px;color:var(--muted)}
+  .common .cc b{color:var(--txt);font-weight:500}
+  .common p{font-size:12.5px;color:var(--faint);margin-top:10px}
+
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
   .tbl{background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
   .tbl .hd{font-family:var(--mono);font-size:14px;color:#16130a;background:var(--gold);padding:10px 15px;font-weight:500;display:flex;justify-content:space-between;align-items:center}
   .tbl.t .hd{background:var(--teal);color:#08201e} .tbl.v .hd{background:var(--violet);color:#120a2a} .tbl.r .hd{background:var(--rose);color:#2a0f12}
   .tbl .hd .cnt{font-size:11px;opacity:.7}
-  .tbl ul{list-style:none;padding:8px 15px 12px}
+  .tbl ul{list-style:none;padding:8px 15px 10px}
   .tbl li{font-family:var(--mono);font-size:12.5px;padding:4px 0;display:flex;gap:8px;align-items:baseline;border-bottom:1px dashed rgba(255,255,255,.05)}
   .tbl li:last-child{border:none}
   .tbl li .k{font-size:9.5px;padding:1px 6px;border-radius:5px;letter-spacing:.5px;flex-shrink:0;min-width:34px;text-align:center}
   .k.pk{background:rgba(231,178,76,.16);color:var(--gold)} .k.fk{background:rgba(95,199,192,.16);color:var(--teal)}
   .k.u{background:rgba(154,140,255,.16);color:var(--violet)} .k.col{background:rgba(255,255,255,.05);color:var(--faint)}
   .tbl li .nm{color:var(--txt)} .tbl li .ds{color:var(--faint);font-size:11px;margin-left:auto}
-  .tbl li.new .nm{color:var(--rose)} .tbl li.new .nm::after{content:" ★신규";color:var(--rose);font-size:9.5px}
+  .tbl li.new .nm{color:var(--rose)} .tbl li.new .nm::after{content:" ★";color:var(--rose)}
+  .tbl li.lc{opacity:.75} .tbl li.lc .nm{color:var(--faint);font-size:11px} .tbl li.lc .k{background:rgba(103,201,138,.14);color:var(--ok)}
+
   .plain{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
   .pc{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:11px;padding:15px 17px}
-  .pc.hl{border-left-color:var(--rose)}
+  .pc.hl{border-left-color:var(--rose)} .pc.ok{border-left-color:var(--ok)}
   .pc h4{font-size:15px;color:var(--txt);margin-bottom:7px}
   .pc h4 .e{margin-right:7px}
   .pc p{font-size:13.5px;color:var(--muted);line-height:1.65}
@@ -66,9 +77,9 @@
 
   <header>
     <div class="kick rv">database schema · v2-dev</div>
-    <h1 class="rv">ezmerce DB 관계도<span class="s">7개 테이블 · 7개 ENUM — 누가 누구를 가리키나</span></h1>
-    <p class="lead rv">"도매업체가 상품을 올리고, 셀러가 역할에 맞는 가격으로 카탈로그를 본다"를 표로 옮기면 이렇게 됩니다.
-    <b style="color:var(--rose)">도매업체와 에이전시는 다른 주체라 테이블도 분리</b>했습니다. 선은 <b style="color:var(--txt)">1 → N</b> 관계입니다.</p>
+    <h1 class="rv">ezmerce DB 관계도<span class="s">7개 테이블 · 7개 ENUM · 감사(누가)·soft delete 컬럼까지</span></h1>
+    <p class="lead rv">"도매업체가 상품을 올리고, 셀러가 역할에 맞는 가격으로 카탈로그를 본다"를 표로 옮긴 모습.
+    <b style="color:var(--rose)">도매업체와 에이전시는 다른 주체라 테이블도 분리</b>, 모든 테이블은 <b style="color:var(--ok)">soft delete + 감사 컬럼</b>을 가집니다. 선은 <b style="color:var(--txt)">1 → N</b>.</p>
   </header>
 
   <section>
@@ -85,58 +96,42 @@
             .card{font-family:'DM Mono',monospace;font-size:11px;fill:#9aa0b0}
           </style>
         </defs>
-
-        <!-- connectors -->
         <path class="rel" d="M500,62 L500,108" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
         <text class="card" x="512" y="90">1 : 1</text>
-
         <path class="rel" d="M250,216 C330,196 360,158 400,138" marker-end="url(#arrow)"/>
         <text class="card" x="296" y="178">1 : N  소속</text>
-
         <path class="rel" d="M260,236 L400,272" marker-end="url(#arrow)"/>
         <text class="card" x="300" y="248">1 : N  소유</text>
-
         <path class="rel" d="M270,318 C350,300 384,200 402,162" marker-end="url(#arrow)" stroke="#d98a8a"/>
         <text class="card" x="300" y="312" fill="#d98a8a">1 : N  소속/관리</text>
-
         <path class="rel" d="M95,262 C44,300 34,350 34,400 L34,456 L400,456" marker-end="url(#arrow)"/>
         <text class="card" x="42" y="440">1 : N</text>
-
         <path class="rel" d="M600,266 C662,232 696,200 730,180" marker-end="url(#arrow)"/>
         <text class="card" x="612" y="212">1 : N  옵션</text>
-
         <path class="rel" d="M600,292 C662,322 696,342 730,358" marker-end="url(#arrow)"/>
         <text class="card" x="612" y="348">1 : N  이미지</text>
 
-        <!-- boxes -->
         <g><rect x="400" y="20" width="200" height="42" rx="11" fill="#10131b" stroke="#3a4156" stroke-width="1.5"/>
           <text class="bt" x="500" y="39" text-anchor="middle" fill="#9aa0b0">auth.users</text>
           <text class="sub" x="500" y="53" text-anchor="middle">Supabase Auth (외부)</text></g>
-
         <g><rect x="400" y="108" width="200" height="56" rx="11" fill="#241d0e" stroke="#e7b24c" stroke-width="1.5"/>
           <text class="bt" x="500" y="132" text-anchor="middle" fill="#e7b24c">profiles</text>
           <text class="sub" x="500" y="148" text-anchor="middle">계정 · 역할 · 가격권한</text></g>
-
         <g><rect x="50" y="200" width="210" height="52" rx="11" fill="#241d0e" stroke="#e7b24c" stroke-width="1.5"/>
           <text class="bt" x="155" y="222" text-anchor="middle" fill="#e7b24c">wholesalers</text>
           <text class="sub" x="155" y="238" text-anchor="middle">도매업체 (상품 파는 쪽)</text></g>
-
         <g><rect x="50" y="300" width="210" height="52" rx="11" fill="#2a1622" stroke="#d98a8a" stroke-width="1.5"/>
           <text class="bt" x="155" y="322" text-anchor="middle" fill="#d98a8a">agencies</text>
           <text class="sub" x="155" y="338" text-anchor="middle">에이전시 (셀러 관리하는 쪽)</text></g>
-
         <g><rect x="400" y="248" width="200" height="56" rx="11" fill="#0e2120" stroke="#5fc7c0" stroke-width="1.5"/>
           <text class="bt" x="500" y="272" text-anchor="middle" fill="#5fc7c0">products</text>
           <text class="sub" x="500" y="288" text-anchor="middle">상품 마스터 + 품번</text></g>
-
         <g><rect x="730" y="150" width="212" height="56" rx="11" fill="#0e2120" stroke="#5fc7c0" stroke-width="1.5"/>
           <text class="bt" x="836" y="174" text-anchor="middle" fill="#5fc7c0">product_skus</text>
           <text class="sub" x="836" y="190" text-anchor="middle">옵션 · 도매가/판매가 · 재고</text></g>
-
         <g><rect x="730" y="330" width="212" height="56" rx="11" fill="#16122b" stroke="#9a8cff" stroke-width="1.5"/>
           <text class="bt" x="836" y="354" text-anchor="middle" fill="#9a8cff">product_images</text>
           <text class="sub" x="836" y="370" text-anchor="middle">이미지 · 매칭상태</text></g>
-
         <g><rect x="400" y="430" width="220" height="56" rx="11" fill="#16122b" stroke="#9a8cff" stroke-width="1.5"/>
           <text class="bt" x="510" y="454" text-anchor="middle" fill="#9a8cff">upload_jobs</text>
           <text class="sub" x="510" y="470" text-anchor="middle">엑셀 대량업로드 잡</text></g>
@@ -144,8 +139,20 @@
     </div>
     <div class="legend rv">
       <span><b class="pk">PK</b> 기본키</span><span><b class="fk">FK</b> 외래키</span><span><b>U</b> 유니크</span>
-      <span><b class="nw">★</b> 추가됨</span><span>점선=1:1, 실선 화살표=1:N</span>
-      <span style="color:var(--rose)">분홍=에이전시(도매와 분리)</span>
+      <span><b class="nw">★</b> 최근 추가</span><span><b style="color:var(--ok)">🕓</b> 공통 감사/삭제 컬럼</span>
+      <span>점선=1:1, 화살표=1:N</span><span style="color:var(--rose)">분홍=에이전시</span>
+    </div>
+
+    <div class="common rv">
+      <h4>🕓 모든 테이블 공통 컬럼 (감사 + 생명주기)</h4>
+      <div class="cc">
+        <span><b>created_at</b> 생성시각</span>
+        <span><b>updated_at</b> 수정시각 (트리거 자동)</span>
+        <span><b>created_by</b> → profiles (누가 생성)</span>
+        <span><b>updated_by</b> → profiles (누가 수정)</span>
+        <span><b>deleted_at</b> soft delete (NULL=살아있음)</span>
+      </div>
+      <p>아래 표 카드에는 각 테이블 고유 컬럼만 적고, 이 5개 공통 컬럼은 카드 맨 아래 🕓 줄로 요약했습니다. (upload_jobs는 created_by 원래 보유 / profiles는 approved_by 추가 보유)</p>
     </div>
   </section>
 
@@ -155,25 +162,25 @@
     <div class="cards">
       <div class="tbl rv"><div class="hd">wholesalers <span class="cnt">도매업체</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span></li>
-        <li><span class="k col">col</span><span class="nm">name</span></li>
-        <li><span class="k col">col</span><span class="nm">biz_number</span></li>
+        <li><span class="k col">col</span><span class="nm">name · biz_number</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl r rv"><div class="hd">agencies <span class="cnt">에이전시</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span></li>
-        <li><span class="k col">col</span><span class="nm">name</span></li>
-        <li><span class="k col">col</span><span class="nm">biz_number</span></li>
+        <li><span class="k col">col</span><span class="nm">name · biz_number</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl rv"><div class="hd">profiles <span class="cnt">계정</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span><span class="ds">→ auth.users</span></li>
-        <li><span class="k col">col</span><span class="nm">role</span><span class="ds">4역할</span></li>
-        <li><span class="k col">col</span><span class="nm">status</span><span class="ds">승인상태</span></li>
-        <li><span class="k col">col</span><span class="nm">seller_type</span><span class="ds">소속/개인</span></li>
+        <li><span class="k col">col</span><span class="nm">role · status</span></li>
+        <li><span class="k col">col</span><span class="nm">seller_type</span></li>
         <li class="new"><span class="k col">col</span><span class="nm">price_visibility</span><span class="ds">관리자 설정</span></li>
-        <li class="new"><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
-        <li class="new"><span class="k fk">FK</span><span class="nm">agency_id</span><span class="ds">→ agencies</span></li>
-        <li><span class="k fk">FK</span><span class="nm">approved_by</span><span class="ds">→ profiles(self)</span></li>
+        <li><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
+        <li><span class="k fk">FK</span><span class="nm">agency_id</span><span class="ds">→ agencies</span></li>
+        <li><span class="k fk">FK</span><span class="nm">approved_by</span><span class="ds">→ profiles</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl t rv"><div class="hd">products <span class="cnt">상품</span></div><ul>
@@ -181,7 +188,8 @@
         <li><span class="k u">U</span><span class="nm">platform_code</span><span class="ds">글로벌 품번</span></li>
         <li><span class="k col">col</span><span class="nm">source_p_number</span><span class="ds">업체 원본</span></li>
         <li><span class="k col">col</span><span class="nm">item_name · status</span></li>
-        <li class="new"><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
+        <li><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl t rv"><div class="hd">product_skus <span class="cnt">옵션·가격</span></div><ul>
@@ -190,21 +198,24 @@
         <li><span class="k col">col</span><span class="nm">color · size</span></li>
         <li><span class="k col">col</span><span class="nm">wholesale_price</span><span class="ds">도매가</span></li>
         <li><span class="k col">col</span><span class="nm">retail_price</span><span class="ds">판매가</span></li>
-        <li><span class="k col">col</span><span class="nm">stock</span><span class="ds">재고</span></li>
+        <li><span class="k col">col</span><span class="nm">stock</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl v rv"><div class="hd">product_images <span class="cnt">이미지</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span></li>
         <li><span class="k fk">FK</span><span class="nm">product_id</span><span class="ds">→ products</span></li>
-        <li class="new"><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
+        <li><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
         <li><span class="k col">col</span><span class="nm">match_status</span><span class="ds">matched/unmatched</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ 공통 5</span></li>
       </ul></div>
 
       <div class="tbl v rv"><div class="hd">upload_jobs <span class="cnt">업로드잡</span></div><ul>
         <li><span class="k pk">PK</span><span class="nm">id</span></li>
-        <li class="new"><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
+        <li><span class="k fk">FK</span><span class="nm">wholesaler_id</span><span class="ds">→ wholesalers</span></li>
         <li><span class="k fk">FK</span><span class="nm">created_by</span><span class="ds">→ profiles</span></li>
         <li><span class="k col">col</span><span class="nm">status · error_detail</span></li>
+        <li class="lc"><span class="k">🕓</span><span class="nm">+ updated_at·updated_by·deleted_at</span></li>
       </ul></div>
     </div>
   </section>
@@ -213,12 +224,12 @@
     <div class="tag rv"><span class="dot"></span>한눈에 이해하기</div>
     <h2 class="rv">말로 풀면</h2>
     <div class="plain">
-      <div class="pc hl rv"><h4><span class="e">🏢</span>도매업체 ≠ 에이전시</h4><p>둘은 다른 주체라 표를 나눴습니다. <code>wholesalers</code>는 <b style="color:var(--txt)">상품을 파는 쪽</b>, <code>agencies</code>는 <b style="color:var(--txt)">셀러를 관리하는 쪽</b>. 그래서 <code>products.wholesaler_id</code>는 도매업체만 가리킬 수 있습니다(타입 안전).</p></div>
-      <div class="pc rv"><h4><span class="e">👤</span>사람은 어디 소속?</h4><p>로그인 계정은 <code>profiles</code>. 도매 직원은 <code>wholesaler_id</code>, 에이전시 직원·에이전시 소속 셀러는 <code>agency_id</code>로 소속을 가리킵니다.</p></div>
-      <div class="pc rv"><h4><span class="e">📦</span>업체 → 상품</h4><p>도매업체 <b style="color:var(--txt)">하나</b>가 상품(<code>products</code>)을 <b style="color:var(--txt)">여럿</b> 올립니다. 품번 충돌은 글로벌 <code>platform_code</code>로 차단.</p></div>
-      <div class="pc rv"><h4><span class="e">🎨</span>상품 → 옵션·이미지</h4><p>상품 하나엔 색상/사이즈별 <code>product_skus</code>(도매가·판매가·재고)와 <code>product_images</code>가 여러 개 매달립니다.</p></div>
-      <div class="pc rv"><h4><span class="e">🔍</span>누가 어떤 가격을 보나</h4><p>보여줄 가격은 <code>profiles.price_visibility</code>(관리자 설정)로 결정 — 미설정이면 셀러 유형 기본값. 라이브셀러→도매가, 에이전시→판매가, 소속셀러→미노출.</p></div>
-      <div class="pc rv"><h4><span class="e">📥</span>엑셀 대량 업로드</h4><p>엑셀 한 번 올리면 <code>upload_jobs</code>가 파싱·매칭 상태를 추적하고, 누락 건은 수작업 매칭으로 넘깁니다.</p></div>
+      <div class="pc hl rv"><h4><span class="e">🏢</span>도매업체 ≠ 에이전시</h4><p>다른 주체라 표를 나눔. <code>wholesalers</code>=상품 파는 쪽, <code>agencies</code>=셀러 관리하는 쪽. <code>products.wholesaler_id</code>는 도매업체만 가리킴(타입 안전).</p></div>
+      <div class="pc rv"><h4><span class="e">👤</span>사람은 어디 소속?</h4><p>계정은 <code>profiles</code>. 도매 직원은 <code>wholesaler_id</code>, 에이전시 직원·소속 셀러는 <code>agency_id</code>로 소속을 가리킴.</p></div>
+      <div class="pc rv"><h4><span class="e">📦</span>업체 → 상품 → 옵션·이미지</h4><p>도매업체 1 → 상품 N, 상품 1 → SKU(가격·재고) N + 이미지 N. 품번 충돌은 글로벌 <code>platform_code</code>로 차단.</p></div>
+      <div class="pc rv"><h4><span class="e">🔍</span>누가 어떤 가격을 보나</h4><p><code>profiles.price_visibility</code>(관리자 설정)로 결정 — 미설정이면 셀러 유형 기본값(라이브셀러→도매가, 에이전시→판매가, 소속셀러→미노출).</p></div>
+      <div class="pc ok rv"><h4><span class="e">🗑️</span>삭제는 지우지 않는다 (soft delete)</h4><p>모든 테이블 <code>deleted_at</code>. 진짜 DELETE 안 하고 시각만 찍음 → 복구·감사 가능. 부모를 지우면 자식도 트리거가 함께 처리. 조회는 항상 살아있는 행만.</p></div>
+      <div class="pc ok rv"><h4><span class="e">🕵️</span>누가 뭘 했나 (감사)</h4><p>모든 테이블 <code>created_by</code>/<code>updated_by</code>(→profiles) + <code>created_at</code>/<code>updated_at</code>. updated_at은 수정 때 트리거가 자동 갱신.</p></div>
     </div>
   </section>
 
@@ -234,12 +245,12 @@
       <div class="en"><b>image_match</b><br><span>matched · unmatched</span></div>
       <div class="en"><b>upload_status</b><br><span>uploaded · parsing · needs_matching · completed · failed</span></div>
     </div>
-    <div class="src rv">› source <b>backend/migrations/2026-06-03_v2_core.sql</b> + <b>_02_price_visibility.sql</b> · org_type 제거(도매/에이전시 분리)</div>
+    <div class="src rv">› source <b>backend/migrations/</b> _v2_core · _02_price_visibility · _03_soft_delete · _04_audit</div>
   </section>
 
   <footer>
-    <div class="d">7 tables · 7 enums · 도매 ≠ 에이전시</div>
-    <p>ezmerce v2 · branch v2-dev · wholesalers/agencies 분리 + price_visibility 반영본</p>
+    <div class="d">7 tables · 7 enums · soft delete + 감사 포함</div>
+    <p>ezmerce v2 · branch v2-dev · 분리 + price_visibility + soft delete + created_by/updated_by 반영본</p>
   </footer>
 </div>
 <script>
