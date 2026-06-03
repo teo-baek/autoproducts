@@ -11,7 +11,11 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 def shape_catalog_item(row: dict, user: CurrentUser) -> dict:
     shaped_skus = []
     for sku in row.get("skus", []):
-        price = visible_price(user.role, user.seller_type, sku, viewer_org=user.organization_id)
+        price = visible_price(
+            user.role, user.seller_type, sku,
+            viewer_org=user.organization_id,
+            price_visibility=user.price_visibility,  # 관리자 설정 우선
+        )
         shaped_skus.append({"color": sku["color"], "size": sku["size"], **price})
     return {"platform_code": row["platform_code"], "item_name": row["item_name"], "skus": shaped_skus}
 
