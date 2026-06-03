@@ -28,7 +28,9 @@ def shape_catalog_item(row: dict, user: CurrentUser) -> dict:
 def _query_catalog_rows(sb, limit: int, cursor: str | None = None) -> list[dict]:
     q = sb.table("products").select(
         "platform_code,item_name,product_skus(color,size,wholesale_price,retail_price,wholesaler_id)"
-    ).eq("status", "active").is_("deleted_at", "null").order("created_at").limit(limit)
+    ).eq("status", "active").is_("deleted_at", "null").is_(
+        "product_skus.deleted_at", "null"   # 개별 soft-delete 된 SKU 는 배열에서 제외(규칙: 모든 조회 deleted_at)
+    ).order("created_at").limit(limit)
     if cursor:
         q = q.gt("created_at", cursor)
     return q.execute().data

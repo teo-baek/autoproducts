@@ -33,7 +33,7 @@ class FakeUploadRepo:
         return {"id": jid, **patch}
 
     def get_upload_job(self, jid):
-        return next((j for j in self.jobs if j["id"] == jid), {"id": jid, "wholesaler_id": "w1"})
+        return next((j for j in self.jobs if j["id"] == jid), None)
 
     def products_pnum_map(self, wid):
         return dict(self._pmap)
@@ -47,10 +47,11 @@ class FakeUploadRepo:
     def list_unmatched_images(self, wid):
         return [i for i in self.images if i["match_status"] == "unmatched"]
 
-    def update_image(self, iid, patch):
+    def update_image(self, iid, patch, wholesaler_id=None):
         for i in self.images:
-            if i["id"] == iid: i.update(patch); return i
-        return {"id": iid, **patch}
+            if i["id"] == iid and (wholesaler_id is None or i.get("wholesaler_id") == wholesaler_id):
+                i.update(patch); return i
+        return None
 
 
 def _wholesaler():
@@ -127,5 +128,23 @@ def test_unmatched_and_manual_match_routes(monkeypatch):
         assert m.status_code == 200 and m.json()["match_status"] == "matched"
         bad = c.post("/uploads/job-1/match", json={"image_id": "img1", "source_p_number": "NOPE"})
         assert bad.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_foreign_wholesaler_cannot_touch_others_job(monkeypatch):
+    """도매 w1 의 job 을 w9 직원이 호출 → 404 (IDOR 차단)."""
+    shared = FakeUploadRepo()
+    shared.create_upload_job({"wholesaler_id": "w1"})
+    monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id="intruder", role="wholesaler", status="approved", wholesaler_id="w9")
+    try:
+        c = TestClient(app)
+        assert c.get("/uploads/job-1/unmatched").status_code == 404
+        assert c.post("/uploads/images", json={"job_id": "job-1", "images": [
+            {"original_filename": "x.jpg", "storage_path": "p"}]}).status_code == 404
+        assert c.post("/uploads/job-1/match",
+                      json={"image_id": "img1", "source_p_number": "1001"}).status_code == 404
     finally:
         app.dependency_overrides.clear()

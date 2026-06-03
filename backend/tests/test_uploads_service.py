@@ -1,7 +1,7 @@
 import openpyxl
 import pytest
 from app.services.uploads import (
-    ingest_excel, attach_images, resolve_match, list_unmatched, UploadError,
+    ingest_excel, attach_images, resolve_match, list_unmatched, UploadError, UploadForbidden,
 )
 
 
@@ -29,7 +29,7 @@ class FakeUploadRepo:
         return {"id": jid, **patch}
 
     def get_upload_job(self, jid):
-        return next((j for j in self.jobs if j["id"] == jid), {"id": jid, "wholesaler_id": "w1"})
+        return next((j for j in self.jobs if j["id"] == jid), None)   # 없는 job → None
 
     def products_pnum_map(self, wid):
         return dict(self._pmap)
@@ -43,10 +43,11 @@ class FakeUploadRepo:
     def list_unmatched_images(self, wid):
         return [i for i in self.images if i["match_status"] == "unmatched"]
 
-    def update_image(self, iid, patch):
+    def update_image(self, iid, patch, wholesaler_id=None):
         for i in self.images:
-            if i["id"] == iid: i.update(patch); return i
-        return {"id": iid, **patch}
+            if i["id"] == iid and (wholesaler_id is None or i.get("wholesaler_id") == wholesaler_id):
+                i.update(patch); return i
+        return None
 
 
 def _make_xlsx(path, rows):
@@ -103,7 +104,7 @@ def test_attach_images_matches_by_filename_and_updates_job():
     out = attach_images(repo, "job-1", [
         {"original_filename": "1001_front.jpg", "storage_path": "w1/1001_front.jpg"},
         {"original_filename": "9999.jpg", "storage_path": "w1/9999.jpg"},
-    ], created_by="staff-1")
+    ], created_by="staff-1", caller_wid="w1")
     assert out["matched"] == ["1001_front.jpg"]
     assert out["unmatched"] == ["9999.jpg"]
     assert any(i["match_status"] == "matched" and i["product_id"] == "p1" for i in repo.images)
@@ -117,7 +118,8 @@ def test_attach_images_all_matched_completes_job():
     repo.create_upload_job({"wholesaler_id": "w1"})
     repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
                          "platform_code": "EZM-1", "item_name": "셔츠"})
-    attach_images(repo, "job-1", [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}])
+    attach_images(repo, "job-1", [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}],
+                  caller_wid="w1")
     assert repo.get_upload_job("job-1")["status"] == "completed"
 
 
@@ -128,7 +130,7 @@ def test_resolve_match_links_image_to_product():
                          "platform_code": "EZM-1", "item_name": "셔츠"})
     repo.insert_images([{"wholesaler_id": "w1", "storage_path": "w1/x.jpg",
                          "original_filename": "x.jpg", "product_id": None, "match_status": "unmatched"}])
-    out = resolve_match(repo, "job-1", image_id="img1", source_p_number="1001")
+    out = resolve_match(repo, "job-1", image_id="img1", source_p_number="1001", caller_wid="w1")
     assert out["product_id"] == "p1" and out["match_status"] == "matched"
 
 
@@ -136,7 +138,55 @@ def test_resolve_match_unknown_pnum_raises():
     repo = FakeUploadRepo()
     repo.create_upload_job({"wholesaler_id": "w1"})
     with pytest.raises(UploadError):
-        resolve_match(repo, "job-1", image_id="img1", source_p_number="NOPE")
+        resolve_match(repo, "job-1", image_id="img1", source_p_number="NOPE", caller_wid="w1")
+
+
+def test_uploads_reject_foreign_caller_idor():
+    """도매 w1 의 job 을 w2 가 건드리면 모두 404(UploadForbidden) — IDOR 차단."""
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    with pytest.raises(UploadForbidden):
+        attach_images(repo, "job-1", [{"original_filename": "1001.jpg", "storage_path": "x"}], caller_wid="w2")
+    with pytest.raises(UploadForbidden):
+        list_unmatched(repo, "job-1", caller_wid="w2")
+    with pytest.raises(UploadForbidden):
+        resolve_match(repo, "job-1", image_id="img1", source_p_number="1001", caller_wid="w2")
+
+
+def test_resolve_match_foreign_image_forbidden():
+    """job 은 내 소유여도, 대상 이미지가 타 업체 소유면 갱신 거부."""
+    repo = FakeUploadRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    repo.insert_images([{"wholesaler_id": "w2", "storage_path": "w2/x.jpg",   # 타 업체 이미지
+                         "original_filename": "x.jpg", "product_id": None, "match_status": "unmatched"}])
+    with pytest.raises(UploadForbidden):
+        resolve_match(repo, "job-1", image_id="img1", source_p_number="1001", caller_wid="w1")
+
+
+def test_ingest_excel_duplicate_pnum_becomes_error_not_crash():
+    """재업로드(품번 UNIQUE 충돌)는 해당 품번만 error 로 떨구고 나머지는 계속."""
+    class DupRepo(FakeUploadRepo):
+        def insert_product(self, d):
+            if d["source_p_number"] == "DUP":
+                raise Exception("duplicate key value violates unique constraint")
+            return super().insert_product(d)
+    import openpyxl as _x
+    import tempfile, os
+    fd, p = tempfile.mkstemp(suffix=".xlsx"); os.close(fd)
+    wb = _x.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "도매가", "판매가"])
+    ws.append(("DUP", "중복", "화이트", "F", 1000, 2000))
+    ws.append(("OK1", "정상", "블랙", "F", 1000, 2000))
+    wb.save(p)
+    out = ingest_excel(DupRepo(), "w1", p)
+    os.unlink(p)
+    assert len(out["products"]) == 1                      # OK1 만 생성
+    assert any(e.get("source_p_number") == "DUP" for e in out["errors"])
+    assert out["job"]["status"] == "needs_matching"       # 일부라도 생성됨
 
 
 def test_list_unmatched_returns_only_unmatched():
@@ -148,5 +198,5 @@ def test_list_unmatched_returns_only_unmatched():
         {"wholesaler_id": "w1", "storage_path": "b", "original_filename": "b.jpg",
          "product_id": "p1", "match_status": "matched"},
     ])
-    out = list_unmatched(repo, "job-1")
+    out = list_unmatched(repo, "job-1", caller_wid="w1")
     assert len(out) == 1 and out[0]["original_filename"] == "a.jpg"

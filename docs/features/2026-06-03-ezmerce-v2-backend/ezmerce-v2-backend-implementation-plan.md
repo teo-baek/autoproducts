@@ -1445,3 +1445,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: scale(대량 이미지), side-effect(상품 일괄생성), breaking 아님
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260604-021 (직전 갭 작업), 계획 Task 10(엑셀파서)·Task 11(이미지매칭), 미해결결정(이미지 업로드=프론트 직접 Storage 확정)
+
+### [2026-06-04 01:30] [코드-수정] (갭 C 재검토 — IDOR/500 보안 수정 + API 테스트 노트북)
+- **id**: CH-20260604-023
+- **이유**: code-reviewer 재검토에서 **uploads IDOR**(🔴) 발견 — attach_images/list_unmatched/resolve_match 가 wholesaler_id 를 job 레코드에서만 취하고 호출자와 대조 안 함. 백엔드가 service key(RLS 우회)라 도매 A가 B의 job_id 로 B 데이터 조회/조작 가능. + get_upload_job .single() → 없는 job 500.
+- **무엇이**: app/services/uploads.py(_owned_job 소유권 검증 + UploadForbidden 추가, attach_images/list_unmatched/resolve_match 에 caller_wid 인자·검증, matched_rows 누적, ingest_excel 품번별 try/except 로 UNIQUE 충돌 격리), app/routers/uploads.py(get_upload_job .single()→.maybe_single(), update_image wholesaler 스코프, caller_wid=user.wholesaler_id 전달, _run 으로 UploadForbidden→404·UploadError→400), app/routers/catalog.py(중첩 SKU deleted_at 필터 추가, #7), tests/test_uploads_service.py·test_uploads_routes.py(IDOR/중복품번 테스트 추가, caller_wid 반영), backend/notebooks/ezmerce_v2_api_tests.ipynb(신규 — 1차 API 라이브 통합 테스트 노트북, TestClient+auth override+실 Supabase, 시드/정리 포함)
+- **영향범위**: 업로드 보안 경로. **62 passed**(+4 보안 테스트). 미수정(보고됨): #3 트랜잭션 부재(부분실패 시 job-first 미적용), #6 export 대표가격 폴백 취약, #8 error_detail JSONB 직렬화(날짜셀), upload_jobs RLS 정책 부재(앱레이어 가드로 방어). products.py PATCH/DELETE 도 동일 IDOR 계열(기존 RISK 주석) — 별도 수정 권장.
+- **위험 카테고리**: security(IDOR 차단 — must-fix), breaking 아님(시그니처에 caller_wid 기본값 추가)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260604-022 (갭 C 최초 구현)
