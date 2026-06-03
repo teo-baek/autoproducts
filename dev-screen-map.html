@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ezmerce 1차 — 화면 맵</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0d13; --bg2:#11141d; --panel:#171b26; --panel2:#1e2330;
+  --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.16);
+  --ink:#e9ebf2; --muted:#8b91a6; --dim:#5d6377;
+  --gold:#f5b740; --gold2:#ffd479; --teal:#2dd4bf; --teal2:#6ee9da;
+  --coral:#ff6b6b; --green:#54e08a; --blue:#6aa8ff; --violet:#b388ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink); font-family:'Gothic A1',sans-serif; font-weight:500;
+  line-height:1.5; overflow-x:hidden;
+  background-image:
+    radial-gradient(900px 480px at 8% -5%, rgba(245,183,64,.09), transparent 60%),
+    radial-gradient(760px 560px at 100% 6%, rgba(45,212,191,.07), transparent 55%),
+    linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+  background-size:auto,auto,40px 40px,40px 40px;
+}
+.wrap{max-width:1140px;margin:0 auto;padding:0 22px}
+h1,h2,h3,.disp{font-family:'Black Han Sans',sans-serif;font-weight:400;letter-spacing:-.01em;line-height:1.14}
+
+/* hero */
+.hero{padding:84px 0 40px}
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:800;letter-spacing:.14em;
+  color:var(--gold);border:1px solid rgba(245,183,64,.35);background:rgba(245,183,64,.06);padding:7px 15px;border-radius:100px;text-transform:uppercase}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+.hero h1{font-size:clamp(36px,6vw,68px);margin:20px 0 10px}
+.hero h1 .hl{color:var(--gold);text-shadow:0 0 36px rgba(245,183,64,.35)}
+.hero .sub{font-size:clamp(15px,2vw,20px);color:var(--muted);max-width:720px;font-weight:600}
+
+/* legend */
+.legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:26px;padding:16px 20px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.legend .grp{display:flex;flex-direction:column;gap:8px}
+.legend .lt{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.legend .items{display:flex;gap:8px;flex-wrap:wrap}
+.lg{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.lg i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.st{font-size:11px;font-weight:800;padding:3px 9px;border-radius:100px}
+.st.ok{color:var(--green);background:rgba(84,224,138,.12);border:1px solid rgba(84,224,138,.4)}
+.st.half{color:var(--gold2);background:rgba(245,183,64,.12);border:1px solid rgba(245,183,64,.4)}
+.st.soon{color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--line2)}
+
+/* flow strip */
+.flowstrip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:30px 0 8px}
+.fs{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:12px 16px;font-size:13px;font-weight:700;text-align:center;min-width:0}
+.fs .em{font-size:18px;display:block;margin-bottom:3px}
+.fs.w{border-color:rgba(245,183,64,.45);color:var(--gold2)}
+.fs.s{border-color:rgba(45,212,191,.45);color:var(--teal2)}
+.fs.q{border-color:rgba(106,168,255,.45);color:var(--blue)}
+.fsa{color:var(--dim);font-size:20px;font-weight:800}
+@media(max-width:760px){.fsa{transform:rotate(90deg)}}
+
+/* role section */
+.role-sec{padding:40px 0 8px;border-top:1px solid var(--line);margin-top:30px}
+.role-head{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.role-badge{font-family:'Black Han Sans';font-size:18px;width:54px;height:54px;border-radius:15px;display:grid;place-items:center;flex:none}
+.rb-admin{color:var(--violet);background:rgba(179,136,255,.12);border:1px solid rgba(179,136,255,.4)}
+.rb-w{color:var(--gold);background:rgba(245,183,64,.12);border:1px solid rgba(245,183,64,.4)}
+.rb-s{color:var(--teal);background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.4)}
+.rb-q{color:var(--blue);background:rgba(106,168,255,.12);border:1px solid rgba(106,168,255,.4)}
+.role-head h2{font-size:clamp(22px,3vw,32px)}
+.role-head .rdesc{font-size:13.5px;color:var(--muted);font-weight:600}
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:22px;margin-top:26px}
+
+/* screen caption */
+.scap{font-size:13px;color:var(--muted);font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.scap b{color:var(--ink)}
+.screen{display:flex;flex-direction:column}
+
+/* browser mock */
+.browser{background:var(--panel);border:1px solid var(--line2);border-radius:14px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+.bbar{display:flex;align-items:center;gap:8px;padding:10px 13px;background:var(--bg2);border-bottom:1px solid var(--line)}
+.bbar .dots{display:flex;gap:5px}
+.bbar .dots i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.bbar .dots i:nth-child(1){background:#ff5f57}.bbar .dots i:nth-child(2){background:#febc2e}.bbar .dots i:nth-child(3){background:#28c840}
+.bbar .url{flex:1;font-size:11px;font-weight:700;color:var(--dim);background:var(--panel2);border-radius:7px;padding:5px 11px;font-family:'Gothic A1';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbody{padding:16px;min-height:200px}
+.ptitle{font-family:'Black Han Sans';font-size:15px;margin-bottom:13px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+
+/* wireframe primitives */
+.wf-tabs{display:flex;gap:6px;margin-bottom:13px}
+.wf-tab{font-size:11px;font-weight:700;padding:5px 11px;border-radius:7px;color:var(--muted);background:var(--panel2);border:1px solid var(--line)}
+.wf-tab.on{color:var(--bg);background:var(--gold);border-color:var(--gold)}
+.wf-row{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px;background:var(--bg2)}
+.wf-av{width:30px;height:30px;border-radius:7px;flex:none;background:repeating-linear-gradient(45deg,rgba(255,255,255,.08),rgba(255,255,255,.08) 4px,transparent 4px,transparent 8px)}
+.wf-meta{flex:1;min-width:0}
+.wf-meta .l1{height:8px;width:60%;background:rgba(255,255,255,.22);border-radius:4px;margin-bottom:6px}
+.wf-meta .l2{height:7px;width:38%;background:rgba(255,255,255,.12);border-radius:4px}
+.rolechip{font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px}
+.rc-w{color:var(--gold2);background:rgba(245,183,64,.14)}.rc-s{color:var(--teal2);background:rgba(45,212,191,.14)}.rc-a{color:var(--violet);background:rgba(179,136,255,.14)}
+
+/* buttons */
+.btns{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.btn{font-size:11.5px;font-weight:800;padding:7px 13px;border-radius:8px;border:1px solid var(--line2);color:var(--ink);background:var(--panel2);white-space:nowrap;font-family:'Gothic A1'}
+.btn.prim{color:#1a1206;background:linear-gradient(140deg,var(--gold2),var(--gold));border-color:var(--gold)}
+.btn.danger{color:#ffb3b3;background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.45)}
+.btn.teal{color:#062420;background:linear-gradient(140deg,var(--teal2),var(--teal));border-color:var(--teal)}
+.btn.sm{padding:5px 10px;font-size:10.5px}
+.sel{font-size:11px;font-weight:700;padding:6px 10px;border-radius:7px;background:var(--panel2);border:1px solid var(--line2);color:var(--gold2);display:inline-flex;align-items:center;gap:6px}
+
+/* form */
+.wf-field{margin-bottom:10px}
+.wf-field label{display:block;font-size:10.5px;font-weight:800;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.wf-input{height:30px;border:1px solid var(--line2);border-radius:7px;background:var(--bg2);display:flex;align-items:center;padding:0 10px;font-size:11px;color:var(--muted);font-weight:600}
+.wf-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wf-up{border:1.5px dashed var(--line2);border-radius:9px;padding:14px;text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);background:var(--bg2)}
+.wf-up .em{font-size:20px;display:block;margin-bottom:4px}
+
+/* product grid (catalog) */
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cat-card{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg2)}
+.cat-card .img{height:74px;background:repeating-linear-gradient(45deg,rgba(45,212,191,.1),rgba(45,212,191,.1) 5px,transparent 5px,transparent 10px)}
+.cat-card .info{padding:8px}
+.cat-card .nm{height:7px;width:70%;background:rgba(255,255,255,.22);border-radius:4px;margin-bottom:6px}
+.cat-card .pr{font-size:12px;font-weight:900;color:var(--teal2)}
+.cat-card .pr.hide{color:var(--dim);font-weight:700}
+
+/* match result */
+.matchbar{display:flex;gap:8px;margin:12px 0}
+.mb{flex:1;border-radius:9px;padding:9px;text-align:center;font-size:11px;font-weight:800}
+.mb.ok{color:var(--green);background:rgba(84,224,138,.08);border:1px solid rgba(84,224,138,.3)}
+.mb.no{color:var(--coral);background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3)}
+.mb .big{font-family:'Black Han Sans';font-size:18px;display:block}
+.dragrow{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--muted);padding:9px;border:1px dashed var(--line2);border-radius:8px;background:var(--bg2)}
+.dragrow .ph{width:24px;height:24px;border-radius:5px;background:repeating-linear-gradient(45deg,rgba(255,107,107,.3),rgba(255,107,107,.3) 4px,transparent 4px,transparent 8px);flex:none}
+
+/* phone mock */
+.phone-wrap{display:flex;justify-content:center;padding:6px 0}
+.phone{width:218px;background:#05070b;border:8px solid #05070b;border-radius:34px;box-shadow:0 18px 44px rgba(0,0,0,.5);position:relative;overflow:hidden}
+.phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:90px;height:18px;background:#05070b;border-radius:0 0 12px 12px;z-index:3}
+.phone .pscreen{background:var(--bg2);border-radius:26px;overflow:hidden}
+.phone .pimg{height:220px;background:repeating-linear-gradient(45deg,rgba(106,168,255,.14),rgba(106,168,255,.14) 6px,transparent 6px,transparent 12px);display:grid;place-items:center;color:var(--blue);font-size:11px;font-weight:800}
+.phone .pinfo{padding:14px}
+.phone .pnm{font-family:'Black Han Sans';font-size:15px;margin-bottom:9px}
+.phone .prow{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;padding:7px 0;border-bottom:1px solid var(--line)}
+.phone .prow .k{color:var(--dim)}.phone .prow .v{color:var(--ink)}
+.phone .noprice{margin-top:11px;font-size:10.5px;font-weight:800;color:var(--coral);background:rgba(255,107,107,.08);border:1px dashed rgba(255,107,107,.35);border-radius:8px;padding:8px;text-align:center}
+
+/* source tag */
+.src{margin-top:10px;font-size:10.5px;font-weight:700;color:var(--dim);letter-spacing:.02em}
+.src::before{content:"› ";color:var(--gold);opacity:.6}
+
+/* note banner */
+.banner{background:rgba(106,168,255,.06);border:1px dashed rgba(106,168,255,.35);border-radius:12px;padding:14px 17px;font-size:13px;font-weight:600;color:var(--muted);margin-top:20px;display:flex;gap:11px;align-items:flex-start}
+.banner .ic{color:var(--blue);font-size:17px;flex:none}
+.banner b{color:var(--ink)}
+
+footer{padding:50px 0 70px;border-top:1px solid var(--line);text-align:center;color:var(--dim);font-size:13px;font-weight:600;margin-top:40px}
+footer b{color:var(--muted)}
+
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s cubic-bezier(.2,.7,.2,1),transform .6s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker"><span class="dot"></span> ezmerce 1차 · 화면 맵</span>
+    <h1>누가 / 어디서 / <span class="hl">무슨 버튼</span>을 누르나</h1>
+    <p class="sub">글로만 보면 안 그려지는 1차 개발 범위를, 역할별 화면 골격(와이어프레임)과 버튼으로 펼쳤습니다.</p>
+
+    <div class="legend">
+      <div class="grp">
+        <span class="lt">역할 색</span>
+        <div class="items">
+          <span class="lg"><i style="background:var(--violet)"></i> 관리자</span>
+          <span class="lg"><i style="background:var(--gold)"></i> 도매업체</span>
+          <span class="lg"><i style="background:var(--teal)"></i> 소매셀러</span>
+          <span class="lg"><i style="background:var(--blue)"></i> 공개(QR)</span>
+        </div>
+      </div>
+      <div class="grp">
+        <span class="lt">버튼</span>
+        <div class="items">
+          <span class="btn prim sm">주요 동작</span>
+          <span class="btn sm">보조</span>
+          <span class="btn danger sm">삭제·거절</span>
+        </div>
+      </div>
+      <div class="grp">
+        <span class="lt">구현 상태</span>
+        <div class="items">
+          <span class="st ok">✅ API 작동</span>
+          <span class="st half">🟡 로직만</span>
+          <span class="st soon">⛔ 예정</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flowstrip">
+      <div class="fs w"><span class="em">🏭</span>도매업체<br>상품 등록</div>
+      <span class="fsa">→</span>
+      <div class="fs s"><span class="em">📋</span>카탈로그<br>자동 노출</div>
+      <span class="fsa">→</span>
+      <div class="fs s"><span class="em">🛍️</span>소매셀러<br>열람·다운로드</div>
+      <span class="fsa">+</span>
+      <div class="fs q"><span class="em">📱</span>실물 QR<br>현장 스캔</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ ADMIN ============ -->
+<section class="role-sec reveal">
+  <div class="wrap">
+    <div class="role-head">
+      <div class="role-badge rb-admin">관리</div>
+      <div><h2>관리자 (Admin)</h2><div class="rdesc">폐쇄망의 문지기 — 가입을 승인하고, 셀러별로 가격 보임 여부를 정함</div></div>
+    </div>
+    <div class="screens">
+
+      <!-- A1 -->
+      <div class="screen">
+        <div class="scap"><b>① 가입 승인 관리</b> · 누가 들어올 수 있나 결정</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/admin/accounts</div></div>
+          <div class="bbody">
+            <div class="ptitle">가입 요청 <span class="st half">대기 3건</span></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="rolechip rc-w">도매</span><div class="btns"><span class="btn prim sm">승인</span><span class="btn danger sm">거절</span></div></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="rolechip rc-s">셀러</span><div class="btns"><span class="btn prim sm">승인</span><span class="btn danger sm">거절</span></div></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="rolechip rc-a">에이전시</span><div class="btns"><span class="btn prim sm">승인</span><span class="btn danger sm">거절</span></div></div>
+          </div>
+        </div>
+        <div class="src">GET /admin/accounts · POST /accounts/{id}/approve · /reject &nbsp;<span class="st ok">✅</span></div>
+      </div>
+
+      <!-- A2 -->
+      <div class="screen">
+        <div class="scap"><b>② 셀러 가격 노출 설정</b> · 이 셀러에게 어떤 가격을 보일까</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/admin/price-visibility</div></div>
+          <div class="bbody">
+            <div class="ptitle">셀러별 가격 권한</div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="sel">도매가 ▾</span></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="sel">판매가 ▾</span></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><span class="sel">미노출 ▾</span></div>
+            <div style="font-size:11px;color:var(--dim);font-weight:600;margin-top:6px">옵션: 도매가 / 판매가 / 미노출 (미설정 시 셀러유형 기본값)</div>
+          </div>
+        </div>
+        <div class="src">POST /admin/accounts/{id}/price-visibility &nbsp;<span class="st ok">✅</span></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHOLESALER ============ -->
+<section class="role-sec reveal">
+  <div class="wrap">
+    <div class="role-head">
+      <div class="role-badge rb-w">도매</div>
+      <div><h2>도매업체 (Wholesaler)</h2><div class="rdesc">상품을 올리는 쪽 — 등록하면 카탈로그·QR이 자동으로 따라옴</div></div>
+    </div>
+    <div class="screens">
+
+      <!-- W1 single -->
+      <div class="screen">
+        <div class="scap"><b>① 상품 단건 등록</b> · 한 개씩 폼으로 입력</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/products/new</div></div>
+          <div class="bbody">
+            <div class="ptitle">새 상품 등록</div>
+            <div class="wf-grid2">
+              <div class="wf-field"><label>품번</label><div class="wf-input">1001</div></div>
+              <div class="wf-field"><label>상품명</label><div class="wf-input">플리츠 스커트</div></div>
+              <div class="wf-field"><label>도매가</label><div class="wf-input">12,000</div></div>
+              <div class="wf-field"><label>판매가</label><div class="wf-input">25,000</div></div>
+              <div class="wf-field"><label>색상/사이즈</label><div class="wf-input">블랙 / FREE</div></div>
+              <div class="wf-field"><label>소재·원산지</label><div class="wf-input">폴리 90% · KR</div></div>
+            </div>
+            <div class="wf-field"><label>대표 이미지</label><div class="wf-up"><span class="em">🖼️</span>사진 끌어다 놓기</div></div>
+            <div class="btns" style="margin-top:12px;justify-content:flex-end"><span class="btn sm">취소</span><span class="btn prim">저장 → QR 자동생성</span></div>
+          </div>
+        </div>
+        <div class="src">POST /products &nbsp;<span class="st ok">✅</span></div>
+      </div>
+
+      <!-- W2 bulk -->
+      <div class="screen">
+        <div class="scap"><b>② 대량 등록</b> · 엑셀 + 사진 폴더 통째로</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/products/bulk</div></div>
+          <div class="bbody">
+            <div class="ptitle">엑셀 대량 등록 <span class="st soon">⛔ 화면 예정</span></div>
+            <div class="wf-grid2">
+              <div class="wf-up"><span class="em">📄</span>표준 엑셀 업로드</div>
+              <div class="wf-up"><span class="em">🖼️</span>사진 폴더 업로드</div>
+            </div>
+            <div class="matchbar">
+              <div class="mb ok"><span class="big">28</span>자동 매칭됨</div>
+              <div class="mb no"><span class="big">3</span>미매칭 — 수동</div>
+            </div>
+            <div class="dragrow"><div class="ph"></div>이 사진을 → 상품에 끌어다 맞추기 (드래그&드롭)</div>
+            <div class="btns" style="margin-top:11px;justify-content:flex-end"><span class="btn prim">등록 완료</span></div>
+          </div>
+        </div>
+        <div class="src">파싱·매칭 로직 image_match.py · excel_parse.py <span class="st half">🟡</span> / 업로드 API·드래그UI <span class="st soon">⛔</span></div>
+      </div>
+
+      <!-- W3 list -->
+      <div class="screen">
+        <div class="scap"><b>③ 내 상품 목록</b> · 수정·삭제·보관 + QR 엑셀 출력</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/products</div></div>
+          <div class="bbody">
+            <div class="ptitle">내 상품 <span class="btn prim sm">⬇ QR 엑셀 다운로드</span></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><div class="btns"><span class="btn sm">수정</span><span class="btn sm">보관</span><span class="btn danger sm">삭제</span></div></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><div class="btns"><span class="btn sm">수정</span><span class="btn sm">보관</span><span class="btn danger sm">삭제</span></div></div>
+            <div class="wf-row"><div class="wf-av"></div><div class="wf-meta"><div class="l1"></div><div class="l2"></div></div><div class="btns"><span class="btn sm">수정</span><span class="btn sm">보관</span><span class="btn danger sm">삭제</span></div></div>
+          </div>
+        </div>
+        <div class="src">PATCH /products/{id} · DELETE(soft) <span class="st ok">✅</span> / QR엑셀 excel_export.py <span class="st half">🟡</span></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ RETAIL SELLER ============ -->
+<section class="role-sec reveal">
+  <div class="wrap">
+    <div class="role-head">
+      <div class="role-badge rb-s">셀러</div>
+      <div><h2>소매셀러 (Retail Seller)</h2><div class="rdesc">상품을 보고 떼오는 쪽 — 가격은 "내 권한"에 맞게만 보임</div></div>
+    </div>
+    <div class="screens">
+
+      <!-- S1 catalog -->
+      <div class="screen">
+        <div class="scap"><b>① 폐쇄형 카탈로그</b> · 전체 상품 목록 (로그인 필수)</div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ezmerce.app/catalog</div></div>
+          <div class="bbody">
+            <div class="ptitle">카탈로그 <span class="btn teal sm">⬇ 엑셀(QR) 다운로드</span></div>
+            <div class="cat-grid">
+              <div class="cat-card"><div class="img"></div><div class="info"><div class="nm"></div><div class="pr">₩12,000</div></div></div>
+              <div class="cat-card"><div class="img"></div><div class="info"><div class="nm"></div><div class="pr">₩18,500</div></div></div>
+              <div class="cat-card"><div class="img"></div><div class="info"><div class="nm"></div><div class="pr">₩9,000</div></div></div>
+              <div class="cat-card"><div class="img"></div><div class="info"><div class="nm"></div><div class="pr">₩22,000</div></div></div>
+            </div>
+            <div style="font-size:10.5px;color:var(--dim);font-weight:700;margin-top:9px">↑ 무한 스크롤(페이지네이션) · 가격은 보는 사람 권한대로</div>
+          </div>
+        </div>
+        <div class="src">GET /catalog (visible_price로 역할별 셰이핑) &nbsp;<span class="st ok">✅</span></div>
+      </div>
+
+      <!-- pricing per viewer -->
+      <div class="screen">
+        <div class="scap"><b>② 같은 상품, 보는 사람마다 다른 가격</b></div>
+        <div class="browser">
+          <div class="bbar"><div class="dots"><i></i><i></i><i></i></div><div class="url">같은 상품 — 누가 로그인했나에 따라</div></div>
+          <div class="bbody">
+            <div class="cat-grid" style="grid-template-columns:1fr 1fr 1fr">
+              <div class="cat-card"><div class="img"></div><div class="info"><div style="font-size:9.5px;font-weight:800;color:var(--gold2);margin-bottom:4px">개인 셀러</div><div class="pr">도매가<br>₩12,000</div></div></div>
+              <div class="cat-card"><div class="img"></div><div class="info"><div style="font-size:9.5px;font-weight:800;color:var(--violet);margin-bottom:4px">에이전시</div><div class="pr">판매가<br>₩25,000</div></div></div>
+              <div class="cat-card"><div class="img"></div><div class="info"><div style="font-size:9.5px;font-weight:800;color:var(--dim);margin-bottom:4px">에이전시 소속</div><div class="pr hide">가격<br>미노출</div></div></div>
+            </div>
+            <div style="font-size:10.5px;color:var(--dim);font-weight:700;margin-top:9px">※ 서버가 결정 — 클라이언트(브라우저) 신뢰 안 함</div>
+          </div>
+        </div>
+        <div class="src">services/pricing.py · visible_price() &nbsp;<span class="st ok">✅</span></div>
+      </div>
+
+    </div>
+    <div class="banner"><span class="ic">👑</span><div><b>에이전시(Agency)</b>는 1차에선 <b>카탈로그를 판매가 기준으로 보는 것</b>까지만. 슈퍼 관리자 대시보드·실제 운영은 2차 이후 (역할/권한 구조만 미리 깔아둠).</div></div>
+  </div>
+</section>
+
+<!-- ============ PUBLIC QR ============ -->
+<section class="role-sec reveal">
+  <div class="wrap">
+    <div class="role-head">
+      <div class="role-badge rb-q">QR</div>
+      <div><h2>공개 — QR 스캔 화면</h2><div class="rdesc">실물 옷에 붙은 QR을 폰으로 찍으면 뜨는 카드 (로그인 없음 · 가격 없음)</div></div>
+    </div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="pscreen">
+          <div class="pimg">대표 이미지 (꽉 찬)</div>
+          <div class="pinfo">
+            <div class="pnm">플리츠 스커트</div>
+            <div class="prow"><span class="k">소재·혼용률</span><span class="v">폴리 90%</span></div>
+            <div class="prow"><span class="k">원산지</span><span class="v">대한민국</span></div>
+            <div class="prow"><span class="k">코드</span><span class="v">EZM-000001</span></div>
+            <div class="noprice">🔒 가격은 표시되지 않음 (공개 링크)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="src" style="text-align:center">GET /p/{platform_code} — item_name·fabric·origin·image만 반환, 가격 필드 금지 &nbsp;<span class="st ok">✅</span></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b>ezmerce 1차 화면 맵</b> · 관리자 2 + 도매 3 + 셀러 2 + 공개 QR 1<br>
+    실제 API 라우터(admin/products/catalog/public) 기준 · 출처: backend/app/routers/*
+  </div>
+</footer>
+
+<script>
+const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

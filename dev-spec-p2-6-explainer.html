@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개발 정의서 2~6p 쉽게 보기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c12; --bg2:#0f121a; --panel:#161a25; --panel2:#1c2130;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --ink:#e9ebf2; --muted:#8b91a6; --dim:#5d6377;
+  --gold:#f5b740; --gold2:#ffd479; --teal:#2dd4bf; --teal2:#67e8d8;
+  --coral:#ff6b6b; --green:#54e08a; --blue:#6aa8ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Gothic A1',sans-serif; font-weight:500;
+  line-height:1.55; overflow-x:hidden;
+  background-image:
+    radial-gradient(900px 500px at 12% -5%, rgba(245,183,64,.10), transparent 60%),
+    radial-gradient(800px 600px at 100% 8%, rgba(45,212,191,.08), transparent 55%),
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size:auto,auto,42px 42px,42px 42px;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+h1,h2,h3,.display{font-family:'Black Han Sans',sans-serif;font-weight:400;letter-spacing:-.01em;line-height:1.12}
+
+/* ---------- HERO ---------- */
+.hero{padding:92px 0 54px;position:relative}
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:800;
+  letter-spacing:.16em;color:var(--gold);border:1px solid rgba(245,183,64,.35);
+  background:rgba(245,183,64,.06);padding:7px 15px;border-radius:100px;text-transform:uppercase}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+.hero h1{font-size:clamp(38px,6.4vw,76px);margin:22px 0 8px}
+.hero h1 .hl{color:var(--gold);text-shadow:0 0 38px rgba(245,183,64,.35)}
+.hero .sub{font-size:clamp(16px,2.1vw,21px);color:var(--muted);max-width:760px;font-weight:600}
+.oneliner{margin-top:26px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;
+  background:linear-gradient(120deg,var(--panel),var(--panel2));border:1px solid var(--line);
+  border-left:4px solid var(--gold);border-radius:14px;padding:18px 22px;max-width:820px}
+.oneliner .ic{font-size:24px;line-height:1.2}
+.oneliner b{color:var(--gold2)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.lg{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);padding:7px 13px;border-radius:100px}
+.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* ---------- SECTION SHELL ---------- */
+.section{padding:46px 0;border-top:1px solid var(--line)}
+.sec-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:8px}
+.num{flex:none;font-family:'Black Han Sans';font-size:26px;width:58px;height:58px;border-radius:16px;
+  display:grid;place-items:center;color:var(--bg);background:linear-gradient(140deg,var(--gold2),var(--gold));
+  box-shadow:0 10px 30px rgba(245,183,64,.28)}
+.sec-head h2{font-size:clamp(26px,3.6vw,40px)}
+.sec-head .ph{font-size:13px;font-weight:800;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+.caption{color:var(--muted);font-size:16px;font-weight:600;max-width:780px;margin:6px 0 26px 76px}
+@media(max-width:640px){.caption{margin-left:0}}
+.tag{display:inline-block;font-size:12px;font-weight:800;padding:4px 11px;border-radius:100px;
+  vertical-align:middle;margin-left:10px}
+.tag.hold{color:#ffcaca;background:rgba(255,107,107,.14);border:1px solid rgba(255,107,107,.4)}
+
+/* sub-block */
+.blk{background:linear-gradient(160deg,var(--panel),var(--bg2));border:1px solid var(--line);
+  border-radius:20px;padding:26px;margin-bottom:18px;position:relative;overflow:hidden}
+.blk::before{content:"";position:absolute;inset:0;background:radial-gradient(500px 200px at 90% -20%,rgba(245,183,64,.07),transparent 60%);pointer-events:none}
+.blk-h{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.blk-h .bn{font-family:'Black Han Sans';font-size:14px;color:var(--gold);border:1px solid rgba(245,183,64,.4);
+  border-radius:8px;width:30px;height:30px;display:grid;place-items:center;flex:none}
+.blk-h h3{font-size:19px}
+.blk .lead{color:var(--muted);font-size:14.5px;font-weight:600;margin:2px 0 18px}
+
+/* chips */
+.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.chip{font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;background:var(--panel2);
+  border:1px solid var(--line2);color:var(--ink)}
+.chip.gold{color:var(--gold2);border-color:rgba(245,183,64,.4);background:rgba(245,183,64,.07)}
+.chip.teal{color:var(--teal2);border-color:rgba(45,212,191,.4);background:rgba(45,212,191,.07)}
+
+/* note */
+.note{display:flex;gap:11px;align-items:flex-start;margin-top:16px;font-size:13.5px;font-weight:600;
+  color:var(--muted);background:rgba(106,168,255,.06);border:1px dashed rgba(106,168,255,.35);
+  border-radius:12px;padding:13px 15px}
+.note .ic{color:var(--blue);font-size:16px;flex:none}
+
+/* ---------- FLOW (before/after, fan-out) ---------- */
+.flow{display:flex;align-items:stretch;gap:14px;flex-wrap:wrap}
+.flow>.cell{flex:1 1 200px;min-width:0}
+.arrow{flex:none;align-self:center;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--gold);font-weight:800;font-size:11px}
+.arrow svg{width:46px;height:24px}
+.arrow .lbl{max-width:90px;text-align:center;color:var(--muted);font-weight:700;line-height:1.25}
+@media(max-width:720px){.arrow svg{transform:rotate(90deg)}}
+
+.pane{border-radius:16px;padding:18px;height:100%;border:1px solid var(--line)}
+.pane.bad{background:rgba(255,107,107,.05);border-color:rgba(255,107,107,.28)}
+.pane.good{background:rgba(84,224,138,.05);border-color:rgba(84,224,138,.3)}
+.pane .pt{font-family:'Black Han Sans';font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.pane.bad .pt{color:#ff9b9b}.pane.good .pt{color:var(--green)}
+
+/* messy rows */
+.mrow{height:11px;border-radius:4px;background:linear-gradient(90deg,rgba(255,107,107,.45),rgba(255,107,107,.15));margin-bottom:7px;transform-origin:left}
+.mrow:nth-child(2){width:88%;transform:rotate(-.6deg)}.mrow:nth-child(3){width:64%;transform:rotate(.5deg)}
+.mrow:nth-child(4){width:95%}.mrow:nth-child(5){width:50%;transform:rotate(-.4deg)}
+.mimg{display:flex;gap:6px;margin-top:12px}
+.mimg span{width:26px;height:26px;border-radius:6px;background:repeating-linear-gradient(45deg,rgba(255,107,107,.35),rgba(255,107,107,.35) 4px,transparent 4px,transparent 8px);border:1px solid rgba(255,107,107,.3)}
+/* clean rows */
+.crow{display:flex;align-items:center;gap:9px;background:rgba(84,224,138,.08);border:1px solid rgba(84,224,138,.22);border-radius:8px;padding:6px 8px;margin-bottom:7px}
+.crow .th{width:22px;height:22px;border-radius:5px;background:linear-gradient(135deg,var(--teal),var(--green));flex:none}
+.crow .ln{height:7px;border-radius:4px;background:rgba(84,224,138,.45);flex:1}
+.crow .id{font-size:10px;font-weight:800;color:var(--green);font-family:'Gothic A1'}
+
+/* ---------- GATE ---------- */
+.gate{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;text-align:center}
+.gate .col{flex:1 1 150px;padding:8px}
+.actor{display:flex;flex-direction:column;gap:8px}
+.who{font-size:12.5px;font-weight:800;border-radius:10px;padding:9px 8px;border:1px solid var(--line2)}
+.who.ok{color:var(--green);border-color:rgba(84,224,138,.4);background:rgba(84,224,138,.06)}
+.who.no{color:#ff9b9b;border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.06);text-decoration:line-through;opacity:.85}
+.barrier{flex:none;writing-mode:vertical-rl;font-family:'Black Han Sans';font-size:15px;color:var(--gold);
+  letter-spacing:.1em;padding:14px 10px;border-left:3px dashed var(--gold);border-right:3px dashed var(--gold);
+  background:rgba(245,183,64,.05);margin:0 6px}
+.vault{flex:1 1 180px;background:linear-gradient(150deg,rgba(245,183,64,.12),rgba(245,183,64,.03));
+  border:1px solid rgba(245,183,64,.4);border-radius:14px;padding:16px 12px;color:var(--gold2);font-weight:800;font-size:13.5px}
+.vault .big{font-family:'Black Han Sans';font-size:17px;color:var(--gold);display:block;margin-bottom:4px}
+
+/* QR */
+.qrflow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.qrflow .node{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:12px 14px;font-size:12.5px;font-weight:700;text-align:center;flex:1 1 120px}
+.qrflow .node .em{font-size:22px;display:block;margin-bottom:5px}
+.qrico{width:42px;height:42px;display:block;margin:0 auto 5px}
+.phone{width:64px;height:120px;border:2px solid var(--teal);border-radius:12px;margin:0 auto 5px;padding:5px;background:rgba(45,212,191,.06)}
+.phone .scr{height:100%;border-radius:7px;background:linear-gradient(160deg,rgba(45,212,191,.25),rgba(45,212,191,.05));display:flex;flex-direction:column;gap:3px;padding:5px}
+.phone .scr i{display:block;border-radius:2px;background:rgba(45,212,191,.5)}
+.phone .scr .im{flex:1;border-radius:5px}.phone .scr .t1{height:5px;width:80%}.phone .scr .t2{height:5px;width:55%}
+
+/* spreadsheet */
+.sheet{margin-top:18px;border:1px solid var(--line2);border-radius:12px;overflow:hidden;font-size:12px;font-weight:700}
+.sheet .r{display:grid;grid-template-columns:1.4fr 2fr 1fr .9fr 70px}
+.sheet .r>div{padding:9px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+.sheet .r>div:last-child{border-right:0}
+.sheet .hd{background:var(--panel2);color:var(--muted);font-weight:800}
+.sheet .hd .qcol{color:var(--gold);background:rgba(245,183,64,.08)}
+.sheet .cell-q{display:grid;place-items:center;background:rgba(245,183,64,.05)}
+.sheet svg{width:26px;height:26px}
+
+/* roles */
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:6px}
+@media(max-width:680px){.roles{grid-template-columns:1fr}}
+.role{background:var(--panel2);border:1px solid var(--line2);border-radius:14px;padding:16px;border-top:3px solid}
+.role.w{border-top-color:var(--gold)}.role.s{border-top-color:var(--teal)}.role.a{border-top-color:var(--blue)}
+.role .rt{font-family:'Black Han Sans';font-size:16px;margin-bottom:3px}
+.role.w .rt{color:var(--gold2)}.role.s .rt{color:var(--teal2)}.role.a .rt{color:var(--blue)}
+.role .rd{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:10px}
+.role ul{list-style:none;font-size:12.5px;font-weight:600;color:var(--ink)}
+.role li{padding:4px 0 4px 18px;position:relative}
+.role li::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:900}
+
+/* normalize collision */
+.norm{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.dup{display:flex;flex-direction:column;gap:6px}
+.dup .d{font-size:11.5px;font-weight:800;padding:6px 10px;border-radius:8px;background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3);color:#ff9b9b}
+.dup .d b{color:#fff}
+.uni{font-size:12px;font-weight:800;padding:6px 10px;border-radius:8px;background:rgba(84,224,138,.08);border:1px solid rgba(84,224,138,.35);color:var(--green);margin-bottom:6px}
+
+/* fan out routing */
+.fan{display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;gap:10px}
+@media(max-width:680px){.fan{grid-template-columns:1fr}}
+.fan .src,.fan .dst{display:flex;flex-direction:column;gap:9px}
+.box{background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;font-size:12.5px;font-weight:700}
+.box.src1{border-color:rgba(45,212,191,.45);color:var(--teal2);background:rgba(45,212,191,.06)}
+.box.dst1{border-color:rgba(245,183,64,.4);color:var(--gold2);background:rgba(245,183,64,.05)}
+.fan .mid{display:grid;place-items:center;color:var(--gold);font-size:11px;font-weight:800;text-align:center}
+.fan .mid svg{width:54px;height:90px}
+@media(max-width:680px){.fan .mid svg{transform:rotate(90deg)}}
+
+/* sync two-pane */
+.sync{display:grid;grid-template-columns:1fr 56px 1fr;align-items:center;gap:10px}
+@media(max-width:680px){.sync{grid-template-columns:1fr}}
+.statuspill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:100px;margin:3px 4px 0 0}
+.sp-o{color:var(--blue);background:rgba(106,168,255,.12);border:1px solid rgba(106,168,255,.4)}
+.sp-w{color:var(--gold2);background:rgba(245,183,64,.12);border:1px solid rgba(245,183,64,.4)}
+.sp-c{color:var(--green);background:rgba(84,224,138,.12);border:1px solid rgba(84,224,138,.4)}
+.syncmid{display:grid;place-items:center;color:var(--teal);font-size:20px}
+.syncmid svg{width:40px;height:40px}
+
+/* grid mock */
+.gridmock{margin-top:6px;border:1px solid var(--line2);border-radius:12px;overflow:hidden;font-size:11.5px;font-weight:700}
+.gridmock .gr{display:grid;grid-template-columns:repeat(5,1fr)}
+.gridmock .gr>div{padding:8px 9px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gridmock .gr>div:last-child{border-right:0}
+.gridmock .gh{background:var(--panel2);color:var(--muted);font-weight:800}
+.gridmock .sel{background:rgba(45,212,191,.07)}
+
+/* strategy cards */
+.strat{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:820px){.strat{grid-template-columns:1fr}}
+.scard{background:linear-gradient(160deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:22px;position:relative;overflow:hidden}
+.scard .em{font-size:30px;display:block;margin-bottom:12px}
+.scard h3{font-size:17px;margin-bottom:8px;color:var(--gold2)}
+.scard p{font-size:13px;color:var(--muted);font-weight:600}
+.scard .out{margin-top:14px;font-size:12px;font-weight:800;color:var(--teal2);background:rgba(45,212,191,.08);
+  border:1px solid rgba(45,212,191,.3);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px}
+.lockchain{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;font-weight:800;color:var(--gold2);margin-top:10px}
+.lockchain span{background:rgba(245,183,64,.08);border:1px solid rgba(245,183,64,.3);border-radius:8px;padding:5px 9px}
+.lockchain b{color:var(--gold)}
+
+/* risk */
+.risk{background:linear-gradient(160deg,rgba(255,107,107,.05),var(--bg2));border:1px solid rgba(255,107,107,.22);
+  border-radius:18px;padding:24px;margin-bottom:16px}
+.risk .rh{display:flex;align-items:center;gap:11px;margin-bottom:16px}
+.risk .rh .rn{font-family:'Black Han Sans';font-size:14px;width:30px;height:30px;flex:none;display:grid;place-items:center;
+  color:var(--coral);border:1px solid rgba(255,107,107,.5);border-radius:8px}
+.risk .rh h3{font-size:18px;color:#ffb3b3}
+.risk .rh .spof{font-size:11px;font-weight:800;color:var(--coral);border:1px solid rgba(255,107,107,.5);border-radius:100px;padding:3px 10px;margin-left:auto}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:680px){.vs{grid-template-columns:1fr}}
+.vbox{border-radius:14px;padding:16px}
+.vbox.crit{background:rgba(255,107,107,.06);border:1px solid rgba(255,107,107,.3)}
+.vbox.def{background:rgba(84,224,138,.06);border:1px solid rgba(84,224,138,.3)}
+.vbox .vt{font-family:'Black Han Sans';font-size:13px;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.vbox.crit .vt{color:#ff9b9b}.vbox.def .vt{color:var(--green)}
+.vbox p{font-size:13px;font-weight:600;color:var(--muted)}
+.tracks{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:11px}
+@media(max-width:520px){.tracks{grid-template-columns:1fr}}
+.track{font-size:12px;font-weight:700;color:var(--green);background:rgba(84,224,138,.05);border:1px solid rgba(84,224,138,.25);
+  border-radius:10px;padding:9px 11px;display:flex;gap:8px;align-items:center}
+.track .tk{font-family:'Black Han Sans';font-size:11px;color:var(--bg);background:var(--green);border-radius:6px;padding:2px 6px;flex:none}
+.issue{margin-top:16px;background:rgba(245,183,64,.06);border:1px solid rgba(245,183,64,.35);border-radius:12px;padding:15px 17px;
+  display:flex;gap:11px;align-items:flex-start}
+.issue .ic{font-size:19px;flex:none}
+.issue b{color:var(--gold2)}
+.issue p{font-size:13.5px;font-weight:600;color:var(--ink)}
+
+/* source */
+.src-tag{margin:18px 0 0 76px;font-size:11.5px;font-weight:700;color:var(--dim);letter-spacing:.03em}
+@media(max-width:640px){.src-tag{margin-left:0}}
+.src-tag::before{content:"› source  ";color:var(--gold);opacity:.6}
+
+/* footer */
+footer{padding:54px 0 70px;border-top:1px solid var(--line);text-align:center;color:var(--dim);font-size:13px;font-weight:600}
+footer b{color:var(--muted)}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker"><span class="dot"></span> 개발 요구사항 정의서 · 2~6 페이지</span>
+    <h1>복잡한 정의서를<br><span class="hl">한눈에</span> 풀어보기</h1>
+    <p class="sub">폐쇄형 B2B 도매 카탈로그 &amp; 주문 관리 솔루션 — Phase 1·2·3 개발 단계와 비즈니스 전략·리스크를 그림으로 정리했습니다.</p>
+
+    <div class="oneliner">
+      <span class="ic">🔒</span>
+      <div><b>한 줄 정의</b> — "아무나 못 들어오는(<b>폐쇄형</b>) 도매 시장을 위한, <b>엑셀·QR·주문</b>을 자동으로 처리해 주는 B2B 솔루션."<br>
+      <span style="color:var(--dim);font-weight:600">도매업체 · 소매셀러 · 에이전시, 이 세 그룹만 사용합니다. (일반 소비자 B2C 는 제외)</span></div>
+    </div>
+
+    <div class="legend">
+      <span class="lg"><i style="background:var(--gold)"></i> 만들 기능</span>
+      <span class="lg"><i style="background:var(--teal)"></i> 자동화 포인트</span>
+      <span class="lg"><i style="background:var(--coral)"></i> 리스크 / 논의 필요</span>
+      <span class="lg"><i style="background:var(--blue)"></i> 미정 · 보류</span>
+    </div>
+  </div>
+</header>
+
+<!-- ================= OVERVIEW ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">★</div>
+      <div><div class="ph">overview</div><h2>전체 그림 — 무엇을 어떤 순서로?</h2></div>
+    </div>
+    <p class="caption">데이터 <b style="color:var(--gold2)">엔진</b>부터 짓고 → 그 위에 주문 <b style="color:var(--gold2)">운영</b>을 얹고 → <b style="color:var(--gold2)">상용화</b>로 넘어갑니다. 그리고 이 모든 걸 떠받칠 <b style="color:var(--gold2)">전략</b>과 점검할 <b style="color:var(--coral)">리스크</b>가 붙습니다.</p>
+
+    <div class="flow" style="margin-bottom:20px">
+      <div class="cell"><div class="vault" style="height:100%"><span class="big">Phase 1</span>코어 엔진<br><span style="font-weight:600;color:var(--muted);font-size:12px">데이터 통합 · 카탈로그 자동화</span></div></div>
+      <div class="arrow"><svg viewBox="0 0 46 24"><path d="M2 12h36m0 0l-7-6m7 6l-7 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></div>
+      <div class="cell"><div class="vault" style="height:100%"><span class="big">Phase 2</span>오퍼레이션<br><span style="font-weight:600;color:var(--muted);font-size:12px">배송 현황 · 통합 대시보드</span></div></div>
+      <div class="arrow"><svg viewBox="0 0 46 24"><path d="M2 12h36m0 0l-7-6m7 6l-7 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></div>
+      <div class="cell"><div class="vault" style="height:100%;opacity:.78"><span class="big">Phase 3</span>상용화 <span style="font-size:10px;color:var(--coral)">(보류)</span><br><span style="font-weight:600;color:var(--muted);font-size:12px">구독 · 스마트 채팅</span></div></div>
+    </div>
+    <div class="flow">
+      <div class="cell"><div class="pane" style="border-color:rgba(45,212,191,.3);background:rgba(45,212,191,.04)"><div class="pt" style="color:var(--teal2);font-family:'Black Han Sans';font-size:14px">💡 비즈니스 전략 (5p)</div><span style="font-size:13px;color:var(--muted);font-weight:600">폐쇄형이라서 더 강해지는 무기 3가지</span></div></div>
+      <div class="cell"><div class="pane bad"><div class="pt">⚠️ 논의 필요 (6p)</div><span style="font-size:13px;color:var(--muted);font-weight:600">폐쇄형의 약점과 방어 전략</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PHASE 1 ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">1</div>
+      <div><div class="ph">slide 2 · phase 1</div><h2>코어 엔진 구축</h2></div>
+    </div>
+    <p class="caption">영업·도입의 <b style="color:var(--gold2)">기반 시스템</b>. POS 데이터를 옮겨오고, 실물 라벨(QR)을 뽑고, 권한별 접근을 1차로 완성합니다.</p>
+
+    <!-- A: data upload -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">A</span><h3>데이터 업로드 &amp; 상품 관리 (CRUD)</h3></div>
+      <p class="lead">제각각인 엑셀과 사진 더미를 → 백엔드가 알아서 파싱·매칭해 깔끔한 상품 DB 로 만듭니다.</p>
+      <div class="flow">
+        <div class="cell"><div class="pane bad">
+          <div class="pt">😵 입력 — 비정형 그대로</div>
+          <div class="mrow"></div><div class="mrow"></div><div class="mrow"></div><div class="mrow"></div><div class="mrow"></div>
+          <div class="mimg"><span></span><span></span><span></span><span></span></div>
+          <div style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px">업체마다 다른 POS 엑셀(Raw) + 상품 이미지 대량(Bulk)</div>
+        </div></div>
+        <div class="arrow"><svg viewBox="0 0 46 24"><path d="M2 12h36m0 0l-7-6m7 6l-7 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg><span class="lbl">백엔드 자동 파싱 &amp; 자동 매칭</span></div>
+        <div class="cell"><div class="pane good">
+          <div class="pt">✨ 출력 — 정규화된 상품 DB</div>
+          <div class="crow"><span class="th"></span><span class="ln"></span><span class="id">#A-001</span></div>
+          <div class="crow"><span class="th"></span><span class="ln"></span><span class="id">#A-002</span></div>
+          <div class="crow"><span class="th"></span><span class="ln"></span><span class="id">#B-118</span></div>
+          <div class="crow"><span class="th"></span><span class="ln"></span><span class="id">#C-204</span></div>
+          <div style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px">엑셀 데이터 ↔ 제품 이미지가 자동으로 짝지어짐</div>
+        </div></div>
+      </div>
+      <div class="note"><span class="ic">🛠️</span><div>자동으로 안 맞거나 빠진 건(엑셀 ↔ 이미지) → <b style="color:var(--ink)">사람이 직접 끌어다 맞추는 화면</b>을 따로 제공. (MVP 의 품번·이미지명 자동 매핑을 보조하는 안전장치)</div></div>
+      <div class="chips">
+        <span class="chip gold">신규 등록 · 단건</span>
+        <span class="chip gold">신규 등록 · 대량(Bulk)</span>
+        <span class="chip">수정</span>
+        <span class="chip">삭제</span>
+        <span class="chip">보관(Archive)</span>
+      </div>
+    </div>
+
+    <!-- B: closed catalog + QR -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">B</span><h3>폐쇄형 카탈로그 + QR (온·오프라인 연동)</h3></div>
+      <p class="lead">승인된 사람만 들어오는 카탈로그 + 상품마다 QR 자동 생성 + 엑셀에 QR 이미지까지 박아서 출력.</p>
+
+      <div class="gate">
+        <div class="col"><div class="actor">
+          <div class="who ok">✅ 사전 승인 소매 셀러</div>
+          <div class="who ok">✅ 사전 승인 에이전시</div>
+          <div class="who no">❌ 일반 소비자(B2C)</div>
+        </div></div>
+        <div class="barrier">승인 GATE</div>
+        <div class="vault"><span class="big">폐쇄형 전체 상품<br>카탈로그 뷰</span>승인된 사람만 보는 단일 카탈로그 페이지</div>
+      </div>
+
+      <div style="height:18px"></div>
+      <div class="qrflow">
+        <div class="node"><span class="em">📦</span>상품</div>
+        <div class="node"><svg class="qrico" viewBox="0 0 100 100"><rect width="100" height="100" rx="8" fill="rgba(245,183,64,.1)"/><g fill="#f5b740"><rect x="14" y="14" width="22" height="22"/><rect x="64" y="14" width="22" height="22"/><rect x="14" y="64" width="22" height="22"/><rect x="46" y="46" width="10" height="10"/><rect x="64" y="58" width="10" height="10"/><rect x="76" y="70" width="10" height="10"/><rect x="58" y="76" width="10" height="10"/></g></svg>QR 코드 자동 생성</div>
+        <div class="node"><span class="em">📷</span>스캔</div>
+        <div class="node"><div class="phone"><div class="scr"><i class="im"></i><i class="t1"></i><i class="t2"></i></div></div>인스타 비율 모바일 카드로 제품 정보 노출</div>
+      </div>
+
+      <div style="font-size:13px;color:var(--muted);font-weight:700;margin:20px 0 4px">📥 셀러용 엑셀 다운로드 — 최우측 열에 QR 이미지가 <b style="color:var(--gold2)">자동 삽입</b> (기존 폼텍 라벨 출력 과정을 대체)</div>
+      <div class="sheet">
+        <div class="r hd"><div>품번</div><div>상품명</div><div>가격</div><div>수량</div><div class="qcol">QR</div></div>
+        <div class="r"><div>#A-001</div><div>플리츠 스커트</div><div>12,000</div><div>30</div><div class="cell-q"><svg viewBox="0 0 100 100"><g fill="#f5b740"><rect x="10" y="10" width="26" height="26"/><rect x="64" y="10" width="26" height="26"/><rect x="10" y="64" width="26" height="26"/><rect x="50" y="50" width="14" height="14"/><rect x="72" y="64" width="12" height="12"/></g></svg></div></div>
+        <div class="r"><div>#B-118</div><div>오버핏 셔츠</div><div>18,500</div><div>20</div><div class="cell-q"><svg viewBox="0 0 100 100"><g fill="#f5b740"><rect x="10" y="10" width="26" height="26"/><rect x="64" y="10" width="26" height="26"/><rect x="10" y="64" width="26" height="26"/><rect x="58" y="46" width="12" height="12"/><rect x="46" y="72" width="14" height="14"/></g></svg></div></div>
+      </div>
+    </div>
+
+    <!-- C: RBAC + 품번 -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">C</span><h3>권한 관리 &amp; 데이터 아키텍처 <span style="font-size:12px;color:var(--muted);font-weight:600">— 백엔드 핵심</span></h3></div>
+      <p class="lead">계정을 3그룹으로 쪼개 권한을 따로 주고(RBAC), 여러 업체 상품이 섞여도 안 부딪히게 품번을 정규화합니다.</p>
+
+      <div class="roles">
+        <div class="role w"><div class="rt">도매 업체</div><div class="rd">상품을 올리고 파는 쪽</div><ul><li>상품 등록·관리</li><li>주문 받기</li><li>배송 현황 수정</li></ul></div>
+        <div class="role s"><div class="rt">소매 셀러</div><div class="rd">상품을 사 가는 쪽</div><ul><li>카탈로그 열람</li><li>엑셀 다운로드</li><li>주문·상태 확인</li></ul></div>
+        <div class="role a"><div class="rt">에이전시</div><div class="rd">셀러들을 관리하는 쪽</div><ul><li>하위 셀러 관리</li><li>통합 현황 조회</li><li>(전략단계) 슈퍼 관리자</li></ul></div>
+      </div>
+
+      <div style="font-size:13px;color:var(--muted);font-weight:700;margin:22px 0 6px">🔧 품번 정규화 — 업체마다 같은 품번을 써도 충돌 없이 <b style="color:var(--green)">자체 식별자</b> 부여</div>
+      <div class="norm">
+        <div class="dup">
+          <div class="d">A업체 · <b>001</b></div>
+          <div class="d">B업체 · <b>001</b></div>
+          <div class="d">C업체 · <b>001</b></div>
+        </div>
+        <div class="arrow"><svg viewBox="0 0 46 24"><path d="M2 12h36m0 0l-7-6m7 6l-7 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg><span class="lbl">정규화</span></div>
+        <div>
+          <div class="uni">→ #A-001 (고유)</div>
+          <div class="uni">→ #B-001 (고유)</div>
+          <div class="uni">→ #C-001 (고유)</div>
+        </div>
+      </div>
+    </div>
+    <p class="src-tag">개발 정의서.pptx · slide 2 (Phase 1)</p>
+  </div>
+</section>
+
+<!-- ================= PHASE 2 ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">2</div>
+      <div><div class="ph">slide 3 · phase 2</div><h2>오퍼레이션 시스템</h2></div>
+    </div>
+    <p class="caption">도매상 ↔ 셀러의 <b style="color:var(--gold2)">주문 현황을 자동으로 동기화</b>해서, 전화·카톡으로 일일이 확인하던 소통 비용을 줄입니다.</p>
+
+    <!-- A: routing -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">A</span><h3>셀러 엑셀 주문 → 자동 라우팅</h3></div>
+      <p class="lead">셀러는 시스템 버튼이 아니라 <b style="color:var(--teal2)">자기가 쓰던 주문 엑셀</b>을 그냥 올립니다. 백엔드가 파싱해서 제품별로 알맞은 도매업체에 자동 발주.</p>
+      <div class="fan">
+        <div class="src"><div class="box src1">📄 셀러의 주문 엑셀<br><span style="font-weight:600;color:var(--muted);font-size:11px">자기 양식 그대로 업로드</span></div></div>
+        <div class="mid"><svg viewBox="0 0 54 90"><path d="M4 45h18M22 45C30 45 30 18 46 18M22 45C30 45 30 45 46 45M22 45C30 45 30 72 46 72" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M40 13l6 5-6 5M40 40l6 5-6 5M40 67l6 5-6 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg><span>파싱<br>→ 분류</span></div>
+        <div class="dst">
+          <div class="box dst1">🏭 A 도매업체 — 해당 품목만</div>
+          <div class="box dst1">🏭 B 도매업체 — 해당 품목만</div>
+          <div class="box dst1">🏭 C 도매업체 — 해당 품목만</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B: realtime sync -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">B</span><h3>실시간 상태 동기화 대시보드</h3></div>
+      <p class="lead">도매상이 배송 현황을 고치면 → 셀러는 자기 전용 대시보드에서 즉시 확인.</p>
+      <div class="sync">
+        <div class="box"><div style="font-family:'Black Han Sans';font-size:13px;color:var(--gold2);margin-bottom:8px">🏭 도매상 — 현황 수정</div>
+          <span class="statuspill sp-o">주문</span><span class="statuspill sp-w">대기</span><span class="statuspill sp-c">확정</span>
+        </div>
+        <div class="syncmid"><svg viewBox="0 0 40 40"><path d="M8 14h20m0 0l-6-5m6 5l-6 5M32 26H12m0 0l6-5m-6 5l6 5" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></div>
+        <div class="box"><div style="font-family:'Black Han Sans';font-size:13px;color:var(--teal2);margin-bottom:8px">🛍️ 셀러 — 즉시 확인</div>
+          <span style="font-size:12px;color:var(--muted);font-weight:600">내 주문이 지금 어느 단계인지 전용 대시보드에서 실시간으로 보임</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- C: grid UI -->
+    <div class="blk">
+      <div class="blk-h"><span class="bn">C</span><h3>그리드형 통합 관리 인터페이스</h3></div>
+      <p class="lead">엑셀처럼 생긴 웹 화면. 주문·배송을 한눈에 보고, 여러 줄을 골라 <b style="color:var(--gold2)">일괄 수정·완료</b>.</p>
+      <div class="gridmock">
+        <div class="gr gh"><div>주문번호</div><div>셀러</div><div>품목</div><div>도매상</div><div>상태</div></div>
+        <div class="gr sel"><div>#2401</div><div>옹심언니</div><div>플리츠 스커트</div><div>A업체</div><div style="color:var(--green)">확정</div></div>
+        <div class="gr"><div>#2402</div><div>키스마녀</div><div>오버핏 셔츠</div><div>B업체</div><div style="color:var(--gold2)">대기</div></div>
+        <div class="gr sel"><div>#2403</div><div>비바루비</div><div>니트 가디건</div><div>C업체</div><div style="color:var(--blue)">주문</div></div>
+      </div>
+      <div class="chips"><span class="chip teal">✓ 선택 일괄 수정</span><span class="chip teal">✓ 선택 일괄 완료</span><span class="chip">한 화면 통합 조회</span></div>
+    </div>
+    <p class="src-tag">개발 정의서.pptx · slide 3 (Phase 2)</p>
+  </div>
+</section>
+
+<!-- ================= PHASE 3 ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">3</div>
+      <div><div class="ph">slide 4 · phase 3</div><h2>상용화 &amp; 스마트 커뮤니케이션 <span class="tag hold">보류 · 유동적</span></h2></div>
+    </div>
+    <p class="caption">사용자가 충분히 모인 뒤 진행하는 단계. <b style="color:var(--coral)">아직 미정인 부분</b>이 섞여 있습니다.</p>
+
+    <div class="strat">
+      <div class="scard" style="grid-column:span 1">
+        <span class="em">💳</span>
+        <h3>상용화 구독 플랜</h3>
+        <p>서비스 유료화를 위한 구독 플랜 선택 + 결제 페이지 제작.</p>
+        <div class="note" style="margin-top:14px"><span class="ic">❔</span><div>내부 결제 기능 직접 개발 &amp; PG 연동은 <b style="color:var(--ink)">현재 미정</b></div></div>
+      </div>
+      <div class="scard" style="grid-column:span 2">
+        <span class="em">💬</span>
+        <h3>스마트 통합 채팅 라우팅</h3>
+        <p>1명(셀러) 대 다수(도매상) 구조의 통합 채팅방. 대화 맥락을 보고 자동으로 갈래를 나눕니다.</p>
+        <div class="fan" style="margin-top:16px">
+          <div class="src"><div class="box src1">🛍️ 셀러 1명<br><span style="font-weight:600;color:var(--muted);font-size:11px">통합 채팅방</span></div></div>
+          <div class="mid"><svg viewBox="0 0 54 90"><path d="M4 45h18M22 45C30 45 30 22 46 22M22 45C30 45 30 68 46 68" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M40 17l6 5-6 5M40 63l6 5-6 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg><span>맥락<br>자동 분기</span></div>
+          <div class="dst"><div class="box dst1">🙋 1:1 대화</div><div class="box dst1">📢 전체 공지</div></div>
+        </div>
+        <div class="note" style="margin-top:14px"><span class="ic">❔</span><div>AI 에이전트 적용 여부는 <b style="color:var(--ink)">현재 미정</b></div></div>
+      </div>
+    </div>
+    <p class="src-tag">개발 정의서.pptx · slide 4 (Phase 3)</p>
+  </div>
+</section>
+
+<!-- ================= STRATEGY (5p) ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">💡</div>
+      <div><div class="ph">slide 5 · strategy</div><h2>폐쇄형이라서 더 강한 무기 3가지</h2></div>
+    </div>
+    <p class="caption">B2C(일반 소비자)를 일부러 버리고 인가된 사람만 두면 → <b style="color:var(--teal2)">네트워크 신뢰도</b>와 <b style="color:var(--teal2)">운영 효율</b> 자체가 사업 무기가 됩니다.</p>
+
+    <div class="strat">
+      <div class="scard">
+        <span class="em">👑</span>
+        <h3>에이전시 슈퍼 관리자 대시보드</h3>
+        <p>하위 셀러들의 주문 이력·취급 품목·미송 발생률을 에이전시가 한눈에 파악. 엑셀 수기 관리 → 데이터 기반 관리로.</p>
+        <div class="lockchain"><span>통합 관리</span><b>→</b><span>이거 없으면 불편</span><b>→</b><span style="color:var(--gold)">🔒 Lock-in</span></div>
+      </div>
+      <div class="scard">
+        <span class="em">📒</span>
+        <h3>미송·정산 원장(Ledger)</h3>
+        <p>폐쇄 도매망의 가장 큰 아픔 = 현금 흐름(선입금·미송금·환불금)의 불투명. 도매-셀러 간 채권/채무를 극도로 투명하게 시각화.</p>
+        <div class="out">💰 신뢰 비용 ↓ → 기꺼이 구독료 내는 명분</div>
+      </div>
+      <div class="scard">
+        <span class="em">🎟️</span>
+        <h3>초대 전용(Invite-Only)</h3>
+        <p>완전 폐쇄몰을 유지하되 '초대권(Invite Token)' 부여. 우수 에이전시·셀러에게 한정 수량의 신규 초대 권한을.</p>
+        <div class="out">✨ 진입 자체가 프리미엄 → 바이럴 루프</div>
+      </div>
+    </div>
+    <p class="src-tag">개발 정의서.pptx · slide 5 (비즈니스 전개 전략)</p>
+  </div>
+</section>
+
+<!-- ================= RISKS (6p) ================= -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num" style="background:linear-gradient(140deg,#ff8f8f,var(--coral));box-shadow:0 10px 30px rgba(255,107,107,.28)">⚠️</div>
+      <div><div class="ph" style="color:var(--coral)">slide 6 · discussion</div><h2>논의 필요 — 폐쇄형의 약점</h2></div>
+    </div>
+    <p class="caption">B2C 를 포기하고 폐쇄형 B2B 에만 집중할 때 생기는 <b style="color:var(--coral)">사업적 취약점</b>과, 거기에 대한 방어 전략.</p>
+
+    <!-- risk 1 -->
+    <div class="risk">
+      <div class="rh"><span class="rn">1</span><h3>에이전시 권력 집중 &amp; 이탈 리스크</h3><span class="spof">Single Point of Failure</span></div>
+      <div class="vs">
+        <div class="vbox crit"><div class="vt">🔻 비판적 시각</div><p>신규 셀러 유입·도매상 연결 권한이 모두 에이전시에 종속. 대형 에이전시 하나가 이탈하면 그 산하의 도매상·셀러 <b style="color:#fff">네트워크 전체가 일거에 증발</b>.</p></div>
+        <div class="vbox def"><div class="vt">🛡️ 방어 전략</div><p>도매·셀러가 에이전시 없이도 <b style="color:#fff">플랫폼 자체 편의성</b>(자동 파싱, 오류 없는 재고 동기화)에 깊이 의존하게. "이 시스템 없인 업무가 안 돌아간다"는 수준의 자동화 유틸 확보.</p></div>
+      </div>
+    </div>
+
+    <!-- risk 2 -->
+    <div class="risk">
+      <div class="rh"><span class="rn">2</span><h3>자생적 스케일업의 병목</h3></div>
+      <div class="vs">
+        <div class="vbox crit"><div class="vt">🔻 비판적 시각</div><p>B2C 라는 볼륨 시장을 포기 → 매출 상방이 <b style="color:#fff">'가입 도매상·셀러 수 × 구독료'</b>로 엄격히 제한. 유기적 트래픽 성장이 안 돼 J커브 만들기 매우 어려움.</p></div>
+        <div class="vbox def"><div class="vt">🛡️ 방어 전략 — 다양한 Track 세일즈</div>
+          <div class="tracks">
+            <div class="track"><span class="tk">T1</span>특정 기업 전용 폐쇄형 솔루션</div>
+            <div class="track"><span class="tk">T2</span>자유로운 플랫폼 솔루션</div>
+            <div class="track"><span class="tk">T3</span>에이전시 전용 폐쇄형 솔루션</div>
+            <div class="track"><span class="tk">T4</span>행동 데이터 통계 분석 판매</div>
+          </div>
+          <p style="margin-top:10px;font-size:12px">※ 특정 기능은 <b style="color:var(--ink)">토글로 자유 전환</b> 가능하게 하는 것도 논의</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="issue">
+      <span class="ic">🔥</span>
+      <p><b>핵심 쟁점</b> — 도매업체는 지금 거래 중인 <b>소매 거래처를 남과 공유하기 싫어하는</b> 경우가 대부분. 이 부분을 어떤 방식으로 풀지 별도 논의가 필요함.</p>
+    </div>
+    <p class="src-tag">개발 정의서.pptx · slide 6 (논의 필요)</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b>개발 요구사항 정의서 2~6페이지</b> 시각 요약 · 폐쇄형 B2B 도매 카탈로그 &amp; 주문 관리 솔루션<br>
+    Phase 1 코어 엔진 → Phase 2 오퍼레이션 → Phase 3 상용화(보류) + 💡 전략 + ⚠️ 리스크
+  </div>
+</footer>
+
+<script>
+const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
