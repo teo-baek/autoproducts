@@ -1365,3 +1365,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: side-effect (가격 노출 정책 변경 — 폴백으로 하위호환 유지)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-005 (요구사항), CH-20260603-006 (개발방향)
+
+### [2026-06-03 21:14] [코드-수정] (organizations → wholesalers/agencies 분리)
+- **id**: CH-20260603-009
+- **이유**: 도매업체/에이전시 별도 테이블 분리 반영 (CH-008 개발방향). FK 타입 안전화.
+- **무엇이**: migrations/2026-06-03_v2_core.sql(organizations→wholesalers+agencies, org_type 제거, profiles organization_id→wholesaler_id+agency_id, products/images/jobs wholesaler_org_id→wholesaler_id, RLS), app/schemas/auth.py(CurrentUser wholesaler_id+agency_id), app/routers/catalog.py·products.py, app/services/products.py, tests/test_products_service.py
+- **영향범위**: 상품 소유/카탈로그/가격 경로. 앱 14 라우트 정상, **30 passed** 유지. Task 2의 구 DDL(organizations)은 본 변경으로 supersede.
+- **위험 카테고리**: breaking (스키마 컬럼/테이블명 변경 — 단, DB 미적용 상태라 base 마이그레이션 직접 정리. 라이브 적용본 없었음)
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260603-008 (개발방향)

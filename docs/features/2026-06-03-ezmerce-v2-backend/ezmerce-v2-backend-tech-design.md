@@ -44,16 +44,14 @@
 ### 3.1 ER 관계 요약
 
 ```
-auth.users ─1:1─ profiles ─*:1─ organizations(type: wholesaler|agency)
-                    │                   │
-                    │(agency 소속 셀러)  │1:*
-                    └───────────────────┤
-                                        │
-organizations(wholesaler) ─1:*─ products ─1:*─ product_skus (도매가/판매가/재고)
-                                   │
-                                   └─1:*─ product_images (matched|unmatched)
+auth.users ─1:1─ profiles ─*:1─ wholesalers   (도매 직원)
+                    └──────────*:1─ agencies   (에이전시 직원 / 에이전시 소속 셀러를 관리)
 
-organizations(wholesaler) ─1:*─ upload_jobs (엑셀 대량업로드 + 매칭 상태)
+wholesalers ─1:*─ products ─1:*─ product_skus (도매가/판매가/재고)
+                     │
+                     └─1:*─ product_images (matched|unmatched)
+
+wholesalers ─1:*─ upload_jobs (엑셀 대량업로드 + 매칭 상태)
 ```
 
 ### 3.2 ENUM 타입
@@ -62,20 +60,27 @@ organizations(wholesaler) ─1:*─ upload_jobs (엑셀 대량업로드 + 매칭
 CREATE TYPE user_role        AS ENUM ('admin', 'wholesaler', 'retail_seller', 'agency');
 CREATE TYPE account_status   AS ENUM ('pending', 'approved', 'rejected', 'suspended');
 CREATE TYPE seller_type      AS ENUM ('agency_affiliated', 'independent'); -- retail_seller 전용
-CREATE TYPE org_type         AS ENUM ('wholesaler', 'agency');
 CREATE TYPE product_status   AS ENUM ('active', 'archived');
 CREATE TYPE image_match      AS ENUM ('matched', 'unmatched');
 CREATE TYPE upload_status    AS ENUM ('uploaded', 'parsing', 'needs_matching', 'completed', 'failed');
 ```
 
-### 3.3 organizations (도매업체 / 에이전시)
+### 3.3 wholesalers / agencies (도매업체 · 에이전시 — 분리)
+
+도매업체(상품을 *파는* 쪽)와 에이전시(셀러를 *관리하는* 쪽)는 다른 주체 → **별도 테이블**로 분리해 FK 타입 안전성과 의도를 확보한다.
 
 ```sql
-CREATE TABLE public.organizations (
+CREATE TABLE public.wholesalers (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT NOT NULL,
-    type        org_type NOT NULL,
-    biz_number  TEXT,                         -- 사업자번호(선택)
+    biz_number  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE public.agencies (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        TEXT NOT NULL,
+    biz_number  TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -89,10 +94,11 @@ CREATE TABLE public.profiles (
     status          account_status NOT NULL DEFAULT 'pending',
     full_name       TEXT,
     phone           TEXT,
-    organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
-        -- wholesaler/agency 직원 → 소속 조직
-        -- retail_seller(agency_affiliated) → 소속 에이전시 조직(type=agency)
-        -- independent seller / admin → NULL
+    wholesaler_id   UUID REFERENCES public.wholesalers(id) ON DELETE SET NULL,
+        -- wholesaler 직원 → 소속 도매업체
+    agency_id       UUID REFERENCES public.agencies(id) ON DELETE SET NULL,
+        -- agency 직원 → 소속 에이전시 / retail_seller(agency_affiliated) → 자신을 관리하는 에이전시
+        -- admin / independent seller → 둘 다 NULL
     seller_type     seller_type,              -- role='retail_seller' 일 때만 채움
     price_visibility price_visibility,        -- 관리자 설정형 가격 노출(NULL=미설정→seller_type 기본값 폴백). 델타 마이그레이션 02
     approved_at     TIMESTAMPTZ,
@@ -105,7 +111,8 @@ CREATE TABLE public.profiles (
     )
 );
 CREATE INDEX idx_profiles_role_status ON public.profiles(role, status);
-CREATE INDEX idx_profiles_org ON public.profiles(organization_id);
+CREATE INDEX idx_profiles_wholesaler ON public.profiles(wholesaler_id);
+CREATE INDEX idx_profiles_agency ON public.profiles(agency_id);
 ```
 
 ### 3.5 products (상품 마스터 + 품번 정규화)
@@ -113,7 +120,7 @@ CREATE INDEX idx_profiles_org ON public.profiles(organization_id);
 ```sql
 CREATE TABLE public.products (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wholesaler_org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    wholesaler_id UUID NOT NULL REFERENCES public.wholesalers(id) ON DELETE CASCADE,
     platform_code     TEXT NOT NULL UNIQUE,    -- 품번 정규화: 플랫폼 글로벌 식별자 (예: EZM-000123)
     source_p_number   TEXT NOT NULL,           -- 도매업체 원본 품번 (보존)
     item_name         TEXT NOT NULL,
@@ -127,12 +134,12 @@ CREATE TABLE public.products (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    UNIQUE (wholesaler_org_id, source_p_number)  -- 같은 업체 내 원본품번 중복 방지
+    UNIQUE (wholesaler_id, source_p_number)  -- 같은 업체 내 원본품번 중복 방지
 );
-CREATE INDEX idx_products_org_status ON public.products(wholesaler_org_id, status);
+CREATE INDEX idx_products_org_status ON public.products(wholesaler_id, status);
 ```
 
-> **품번 정규화(FR-2.5) 해법**: 충돌 위험은 두 축으로 차단 — ① 전 플랫폼 유니크인 `platform_code`(플랫폼이 발급, QR·카탈로그·엑셀의 기준 키), ② 업체 스코프 유니크 `UNIQUE(wholesaler_org_id, source_p_number)`. 서로 다른 업체가 같은 원본품번(예: "1001")을 써도 `platform_code`가 다르므로 섞이지 않는다. 발급 방식은 §6 핵심결정-2 참조.
+> **품번 정규화(FR-2.5) 해법**: 충돌 위험은 두 축으로 차단 — ① 전 플랫폼 유니크인 `platform_code`(플랫폼이 발급, QR·카탈로그·엑셀의 기준 키), ② 업체 스코프 유니크 `UNIQUE(wholesaler_id, source_p_number)`. 서로 다른 업체가 같은 원본품번(예: "1001")을 써도 `platform_code`가 다르므로 섞이지 않는다. 발급 방식은 §6 핵심결정-2 참조.
 
 ### 3.6 product_skus (옵션·가격 2종·재고)
 
@@ -157,7 +164,7 @@ CREATE TABLE public.product_skus (
 CREATE TABLE public.product_images (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id        UUID REFERENCES public.products(id) ON DELETE CASCADE, -- NULL=미매칭
-    wholesaler_org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    wholesaler_id UUID NOT NULL REFERENCES public.wholesalers(id) ON DELETE CASCADE,
     storage_path      TEXT NOT NULL,           -- Supabase Storage 경로
     original_filename TEXT,                    -- 품번/이미지명 매칭 기준
     match_status      image_match NOT NULL DEFAULT 'unmatched',
@@ -165,7 +172,7 @@ CREATE TABLE public.product_images (
     sort_order        INTEGER NOT NULL DEFAULT 0,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_images_unmatched ON public.product_images(wholesaler_org_id, match_status);
+CREATE INDEX idx_images_unmatched ON public.product_images(wholesaler_id, match_status);
 ```
 
 > **매칭 흐름(FR-2.3)**: 업로드 시 `original_filename` ↔ `source_p_number`(또는 platform_code)로 자동 매칭 → 성공 시 `product_id` 연결 + `match_status='matched'`. 실패 건은 `unmatched`로 남아 **수작업 매칭 UI**가 `idx_images_unmatched`로 조회해 보정.
@@ -175,7 +182,7 @@ CREATE INDEX idx_images_unmatched ON public.product_images(wholesaler_org_id, ma
 ```sql
 CREATE TABLE public.upload_jobs (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wholesaler_org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    wholesaler_id UUID NOT NULL REFERENCES public.wholesalers(id) ON DELETE CASCADE,
     created_by        UUID REFERENCES public.profiles(id),
     file_path         TEXT,                    -- 업로드된 엑셀 Storage 경로
     status            upload_status NOT NULL DEFAULT 'uploaded',
@@ -233,7 +240,8 @@ RETURNS public.profiles LANGUAGE sql STABLE AS $$
   SELECT * FROM public.profiles WHERE id = auth.uid();
 $$;
 
-ALTER TABLE public.organizations  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wholesalers    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agencies       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_skus   ENABLE ROW LEVEL SECURITY;
@@ -250,7 +258,7 @@ CREATE POLICY products_read_approved ON public.products FOR SELECT
 
 -- products: 도매업체는 자기 조직 상품 CRUD
 CREATE POLICY products_owner_write ON public.products FOR ALL
-  USING (wholesaler_org_id = (SELECT organization_id FROM public.profiles WHERE id = auth.uid()));
+  USING (wholesaler_id = (SELECT wholesaler_id FROM public.profiles WHERE id = auth.uid()));
 -- (skus/images/upload_jobs 도 동일 패턴 + 관리자 전체 권한 정책)
 ```
 
@@ -296,7 +304,7 @@ backend/
 2. **품번 정규화 = 글로벌 `platform_code` + 업체 스코프 원본품번**. 발급: Postgres `SEQUENCE` 기반 `EZM-` 접두 zero-pad (원자적, 동시성 안전). 대안(복합키만) 기각: QR/카탈로그에 단일 글로벌 키 필요.
 3. **가격 노출 = FastAPI 앱 계층 셰이핑** (vs Postgres 역할별 뷰/SECURITY DEFINER). 채택: PoC에서 테스트·제어 단순. RLS는 보조선.
 4. **인증 = Supabase Auth + profiles 미러 테이블**. 대안(자체 인증) 기각: 재발명.
-5. **조직(organizations) 모델 도입(확장형)** (vs 사용자 1인=1업체 평면). 채택: 에이전시↔소속셀러, 다인 도매업체 forward-compat. Phase2 주문/정산도 조직 기준.
+5. **wholesalers / agencies 테이블 분리** (vs 단일 organizations+type). 채택: 도매업체(상품 소유)와 에이전시(셀러 관리)는 다른 주체 + 관계·향후 기능(에이전시 슈퍼관리자/정산 vs 도매 주문/배송)이 발산 → FK 타입 안전(`products.wholesaler_id`→`wholesalers`만) + 의도 명확. `profiles`는 `wholesaler_id`/`agency_id`로 소속 구분.
 6. **이미지 매칭 = product_images(match_status) + upload_jobs 영속화**. 대안(업로드 시 인메모리 매칭) 기각: 수작업 매칭 UI에 영속 상태 필요.
 
 ## 7. 예비 위험
@@ -333,3 +341,10 @@ backend/
 - **무엇이**: §3.4 profiles에 `price_visibility` 컬럼, §3.10 리졸버 규칙/의사코드(관리자 설정 우선 + seller_type 폴백), §4 `/admin/accounts/{id}/price-visibility` 엔드포인트
 - **영향범위**: implementation-plan, code(pricing.py/catalog.py/admin.py/schemas/migration delta 02)
 - **연관 항목**: CH-20260603-005 (요구사항), CH-20260603-007 (코드)
+
+### [2026-06-03 21:14] [개발방향-수정]
+- **id**: CH-20260603-008
+- **이유**: 도매업체와 에이전시는 다른 주체 — 단일 `organizations`+type 를 `wholesalers`/`agencies` 별도 테이블로 분리 (FK 타입 안전 + 의도 명확, 향후 기능 발산 대비)
+- **무엇이**: §3.1 ER, §3.2 ENUM(org_type 제거), §3.3 wholesalers/agencies, §3.4 profiles(organization_id → wholesaler_id+agency_id), §3.5/3.7/3.8 wholesaler_org_id → wholesaler_id, §3.11 RLS, §6 핵심결정-5
+- **영향범위**: code(migration base 재작성, schemas/auth.py, routers/catalog·products, services/products), implementation-plan Task 2 DDL은 본 마이그레이션으로 supersede
+- **연관 항목**: CH-20260603-009 (코드)
