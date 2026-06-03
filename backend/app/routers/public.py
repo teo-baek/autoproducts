@@ -16,9 +16,12 @@ def qr_png(platform_code: str):
 @router.get("/p/{platform_code}")
 def product_card(platform_code: str):
     sb = get_supabase()
-    row = sb.table("products").select(
+    res = sb.table("products").select(
         "platform_code,item_name,fabric_composition,origin,representative_image_url"
-    ).eq("platform_code", platform_code).eq("status", "active").single().execute().data
+    ).eq("platform_code", platform_code).eq("status", "active").is_(
+        "deleted_at", "null"            # soft-delete 된 상품은 공개 링크에서도 차단(규칙)
+    ).maybe_single().execute()          # 0행이면 예외 대신 None → 404
+    row = res.data if res else None
     if not row:
         raise HTTPException(404, "not found")
     return row  # RISK(side-effect): 공개 링크 — 가격 필드 절대 포함 금지

@@ -1454,3 +1454,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: security(IDOR 차단 — must-fix), breaking 아님(시그니처에 caller_wid 기본값 추가)
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260604-022 (갭 C 최초 구현)
+
+### [2026-06-04 01:50] [코드-수정] (기존 IDOR/soft-delete 누락 추가 수정 — products·public)
+- **id**: CH-20260604-024
+- **이유**: 재검토 중 A/B/C 밖 기존 결함 2건 발견 — (1) PATCH/DELETE /products 가 소유 도매 검증 없음(기존 RISK 주석, uploads 와 동일 IDOR 계열) + patch 가 임의 dict 라 mass-assignment(소유/식별 컬럼 변조) 가능, (2) GET /p/{code}(공개카드) 에 deleted_at 필터 누락 → soft-delete 상품(status=active 유지)이 공개 링크로 노출. 둘 다 CLAUDE.md 규칙 위반.
+- **무엇이**: app/routers/products.py(SupabaseProductRepo(owner_wid) 스코프 update + ProductForbidden→404, PATCH 에서 _IMMUTABLE{id,platform_code,wholesaler_id,created_by,created_at,deleted_at} 제거), app/routers/public.py(product_card 에 is_(deleted_at,null) + single()→maybe_single() 로 404 정상화), tests/test_products_routes.py(신규 3 — 타업체 PATCH/DELETE 404, 불변컬럼 제거)
+- **영향범위**: 상품 변경/공개 경로. **65 passed**(+3). create_product 는 insert 라 owner 스코프 불필요. soft_delete_product 서비스는 그대로(owner_wid 는 repo 가 보유).
+- **위험 카테고리**: security(IDOR+mass-assignment 차단), 규칙준수(soft-delete 필터), breaking 아님
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260604-023 (uploads 동일 계열 IDOR 수정)
