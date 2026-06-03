@@ -1427,3 +1427,12 @@ git commit -m "feat(catalog): 폐쇄형 카탈로그 + 역할별 가격 셰이�
 - **위험 카테고리**: scale (대량 카탈로그 시 상한 누락), non-breaking
 - **변경 전/후 코드**: 생략 — `git show` 로 조회
 - **연관 항목**: CH-20260603-019 (직전 코드 변경), 계획 Task 14(엑셀출력)·Task 15(카탈로그)
+
+### [2026-06-04 00:25] [코드-수정] (갭 B: POST /auth/register 백엔드 회원가입, Task 6 잔여)
+- **id**: CH-20260604-021
+- **이유**: 계획 §4 미구현 갭 — 공개 회원가입 엔드포인트 부재. 백엔드 방식 채택(사용자 결정): role/seller_type 검증·기본 price_visibility 시드·승인 플로우를 서버가 통제.
+- **무엇이**: app/schemas/auth.py(RegisterRequest/RegisterResponse DTO), app/services/accounts.py(register_account + RegisterError — 자가가입 role 화이트리스트 retail_seller/agency, seller_type CHECK 정합, seller_type 기준 price_visibility 시드, 검증 선행으로 orphan auth user 방지), app/routers/auth.py(신규, POST /auth/register 공개+SupabaseAuthRepo), app/main.py(auth 라우터 등록), tests/test_register_service.py(신규 7)
+- **영향범위**: 인증/가입 경로. **46 passed**(+7). 라우트 17개. profiles엔 email 컬럼 없음(auth.users 보유) — insert 시 제외. SupabaseAuthRepo.create_auth_user 의 gotrue 응답 형태는 라이브 스모크 검증 필요(RISK 주석).
+- **위험 카테고리**: security (자가가입 role 화이트리스트로 권한상승 차단), breaking 아님
+- **변경 전/후 코드**: 생략 — `git show` 로 조회
+- **연관 항목**: CH-20260604-020 (직전 갭 작업), 계획 Task 6(가입+승인), 미해결결정(가입 방식=백엔드 확정)
