@@ -25,7 +25,15 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      console.error("[login]", error);
+      const msg = error.message ?? "";
+      if (/invalid login credentials/i.test(msg)) {
+        setError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      } else if (/api key|apikey|project|fetch|failed/i.test(msg)) {
+        setError("Supabase 설정 오류 — apps/web/.env.local 의 anon 키를 채우고 dev 서버를 재시작하세요.");
+      } else {
+        setError(`로그인 실패: ${msg}`);
+      }
       return;
     }
     router.push("/");
