@@ -10,6 +10,7 @@ Supabase **SQL Editor**에 아래 파일들을 **순서대로** 붙여넣어 실
 3. `2026-06-03_v2_core_03_soft_delete.sql` — soft delete(`deleted_at`) + 부분 유니크 + soft-cascade 트리거 + RLS 필터
 4. `2026-06-03_v2_core_04_audit.sql` — 감사 컬럼(`created_by`/`updated_by`/`updated_at`) + `set_updated_at` 트리거
 5. `2026-06-03_v2_core_05_platform_code_fn.sql` — `public.next_platform_seq()` RPC 함수(상품 등록 시 platform_code 발급용)
+6. `2026-06-05_v2_core_06_register_fields.sql` — 회원가입 확장: `profiles.company_name`/`business_cert_path`/`id_doc_path` + 비공개 `business-docs` 버킷
 
 ## 주의
 - `_RESET_public.sql`은 **비가역**(데이터 영구 삭제). 올바른 프로젝트인지 확인 후 실행.
