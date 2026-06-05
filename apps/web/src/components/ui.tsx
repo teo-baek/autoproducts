@@ -6,7 +6,7 @@ import type {
   InputHTMLAttributes,
   ReactNode,
 } from "react";
-import { Spinner } from "./icons";
+import { Spinner, UploadCloud } from "./icons";
 
 /* ── Button ─────────────────────────────────────────────────────────────── */
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -133,6 +133,45 @@ export function SegTabs<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/* ── FileRow (서류 업로드 행) ───────────────────────────────────────────── */
+export function FileRow({
+  title,
+  hint,
+  accept = "image/jpeg,image/png,application/pdf",
+  file,
+  onPick,
+  variant = "primary",
+}: {
+  title: string;
+  hint: string;
+  accept?: string;
+  file: File | null;
+  onPick: (f: File | null) => void;
+  variant?: "primary" | "secondary";
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3.5 transition hover:bg-subtle">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground">{title}</div>
+        <div className="truncate text-xs text-muted-foreground">{file ? file.name : hint}</div>
+      </div>
+      <span
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius)] px-3 py-2 text-xs font-semibold text-white ${
+          variant === "primary" ? "bg-ink" : "bg-[var(--color-ink-700)]"
+        }`}
+      >
+        <UploadCloud width={14} height={14} /> 파일 선택
+      </span>
+      <input
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+      />
+    </label>
   );
 }
 
