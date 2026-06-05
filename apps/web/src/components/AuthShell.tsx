@@ -60,8 +60,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
               management.
             </h2>
             <p className="mt-6 max-w-md text-sm leading-relaxed text-white/65">
-              승인된 파트너를 위한 폐쇄형 카탈로그. 역할별 가격·정밀한 재고 관리와
-              에디토리얼 프레젠테이션을 한 곳에서.
+              Precision control and premium editorial presentation for high-stakes
+              inventory and retail partnerships.
             </p>
           </div>
         </div>
