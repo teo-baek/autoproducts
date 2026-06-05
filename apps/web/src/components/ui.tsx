@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useEffect } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -191,6 +191,64 @@ export function Alert({
   return (
     <div className={`rounded-[var(--radius)] px-4 py-3 text-sm ${tones[tone]}`}>
       {children}
+    </div>
+  );
+}
+
+/* ── Modal (중앙 팝업) ──────────────────────────────────────────────────── */
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  actionLabel = "확인",
+  tone = "danger",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  description?: string;
+  children?: ReactNode;
+  actionLabel?: string;
+  tone?: "danger" | "neutral";
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-sm rounded-[var(--radius-xl)] bg-surface p-7 text-center shadow-[var(--shadow-lg)]"
+      >
+        {tone === "danger" && (
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-[var(--color-danger-bg)] text-lg font-bold text-[var(--color-danger-fg)]">
+            !
+          </div>
+        )}
+        {title && <h2 className="text-lg font-bold text-foreground">{title}</h2>}
+        {description && <p className="mt-2 text-sm text-muted-foreground">{description}</p>}
+        {children}
+        <div className="mt-6">
+          <Button onClick={onClose} className="w-full">
+            {actionLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

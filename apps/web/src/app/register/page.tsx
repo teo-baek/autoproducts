@@ -6,7 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { AuthShell } from "@/components/AuthShell";
-import { Alert, Button, Checkbox, FileRow, SegTabs, TextField } from "@/components/ui";
+import { Button, Checkbox, FileRow, Modal, SegTabs, TextField } from "@/components/ui";
 import { ArrowRight, Check } from "@/components/icons";
 
 type MemberType = "retailer" | "wholesaler" | "agency";
@@ -124,8 +124,6 @@ export default function RegisterPage() {
       <p className="mt-2 text-muted-foreground">{copy.subtitle}</p>
 
       <form onSubmit={onSubmit} className="mt-7 space-y-5">
-        <Alert>{error}</Alert>
-
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             label="성명"
@@ -215,6 +213,13 @@ export default function RegisterPage() {
           로그인
         </Link>
       </p>
+
+      <Modal
+        open={!!error}
+        onClose={() => setError(null)}
+        title="가입을 완료할 수 없습니다"
+        description={error ?? undefined}
+      />
     </AuthShell>
   );
 }
