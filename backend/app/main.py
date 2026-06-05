@@ -23,3 +23,17 @@ app.include_router(uploads.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    # 로컬 실행: `python -m app.main` (기본 포트 8444, PORT env 로 override 가능)
+    import os
+
+    import uvicorn
+
+    uvicorn.run(
+        "app.main:app",
+        host=os.getenv("HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "8444")),
+        reload=True,
+    )
