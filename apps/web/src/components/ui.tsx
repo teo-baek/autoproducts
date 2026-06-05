@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -152,26 +152,30 @@ export function FileRow({
   onPick: (f: File | null) => void;
   variant?: "primary" | "secondary";
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3.5 transition hover:bg-subtle">
+    <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3.5">
       <div className="min-w-0">
         <div className="text-sm font-medium text-foreground">{title}</div>
         <div className="truncate text-xs text-muted-foreground">{file ? file.name : hint}</div>
       </div>
-      <span
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius)] px-3 py-2 text-xs font-semibold text-white ${
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 ${
           variant === "primary" ? "bg-ink" : "bg-[var(--color-ink-700)]"
         }`}
       >
-        <UploadCloud width={14} height={14} /> 파일 선택
-      </span>
+        <UploadCloud width={14} height={14} /> {file ? "변경" : "파일 선택"}
+      </button>
       <input
+        ref={inputRef}
         type="file"
         accept={accept}
         className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
       />
-    </label>
+    </div>
   );
 }
 
