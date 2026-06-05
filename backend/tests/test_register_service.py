@@ -134,3 +134,24 @@ def test_upload_documents_authenticated(monkeypatch):
         assert bad.status_code == 400
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+class DupEmailRepo(FakeAuthRepo):
+    def create_auth_user(self, email, password):
+        raise Exception("A user with this email address has already been registered")
+
+
+def test_register_duplicate_email_raises_register_error():
+    with pytest.raises(RegisterError, match="이미 가입"):
+        register_account(DupEmailRepo(), _req())
+
+
+def test_register_route_duplicate_email_returns_400(monkeypatch):
+    import app.routers.auth as auth_mod
+    monkeypatch.setattr(auth_mod, "SupabaseAuthRepo", DupEmailRepo)
+    res = TestClient(app).post("/auth/register", json={
+        "email": "dup@b.com", "password": "pw12345678",
+        "role": "retail_seller", "seller_type": "independent",
+    })
+    assert res.status_code == 400
+    assert "이미 가입" in res.json()["detail"]

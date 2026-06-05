@@ -8,6 +8,14 @@ class RegisterError(Exception):
     pass
 
 
+def _is_duplicate_email(e: Exception) -> bool:
+    """gotrue/supabase 의 '이미 가입된 이메일' 에러 식별(메시지/코드 문자열 기반)."""
+    blob = " ".join(
+        str(getattr(e, attr, "") or "") for attr in ("message", "code", "error_code")
+    ).lower() + " " + str(e).lower()
+    return any(k in blob for k in ("already been registered", "already registered", "user already", "email_exists", "email address has already"))
+
+
 def approve_account(repo, target_id: str, admin_id: str) -> dict:
     return repo.set_status(target_id, "approved", admin_id)
 
@@ -30,7 +38,14 @@ def register_account(repo, req) -> dict:
         raise RegisterError("retail_seller 는 seller_type(independent|agency_affiliated) 가 필요합니다")
     seller_type = req.seller_type if role == "retail_seller" else None  # CHECK: 그 외 역할은 NULL
 
-    auth_user = repo.create_auth_user(req.email, req.password)
+    try:
+        auth_user = repo.create_auth_user(req.email, req.password)
+    except RegisterError:
+        raise
+    except Exception as e:  # gotrue 에러 → 친화 메시지(특히 중복 이메일)로 변환
+        if _is_duplicate_email(e):
+            raise RegisterError("이미 가입된 이메일입니다.") from e
+        raise
     return repo.insert_profile({
         "id": auth_user["id"],
         "role": role,
