@@ -52,9 +52,6 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </header>
 
           <div>
-            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-success-solid)]">
-              폐쇄형 B2B 도매 네트워크 · LALAS
-            </p>
             <h2 className="text-5xl font-extrabold leading-[1.04] tracking-tight">
               Elevate your
               <br />
