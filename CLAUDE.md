@@ -7,7 +7,7 @@
 - 설계 문서/변경이력: `docs/features/2026-06-03-ezmerce-v2-backend/`
 - DB 마이그레이션: `backend/migrations/` (실행 순서: `_v2_core.sql` → `_02_price_visibility.sql` → `_03_soft_delete.sql`)
 - 프론트엔드: `apps/web/` (Next.js App Router + Tailwind v4). **UI/디자인 작업 전 디자인 가이드 필독** (아래 §프론트엔드).
-- **로컬 실행/포트**: 백엔드 `cd backend && .venv/bin/python -m app.main` → **:8444** (= `uvicorn app.main:app --reload --port 8444`, `PORT` env override 가능). 프론트 `cd apps/web && npm run dev` → **:3555**. 프론트→백엔드 호출 base URL = `http://localhost:8444` (env `NEXT_PUBLIC_API_BASE_URL`). CORS는 개발 중 `allow_origins=["*"]`(운영 전 화이트리스트로 좁힐 것).
+- **로컬 실행/포트**: 루트 `Makefile` 사용 — `make dev`(프론트+백엔드 동시) · `make web`(:3555) · `make api`(:8444) · `make stop` · `make test` · `make help`. 개별 명령: 백엔드 `cd backend && .venv/bin/python -m app.main` → **:8444**(`PORT` env override 가능), 프론트 `cd apps/web && npm run dev` → **:3555**. 프론트→백엔드 base URL = `http://localhost:8444`(env `NEXT_PUBLIC_API_BASE_URL`). CORS는 개발 중 `allow_origins=["*"]`(운영 전 화이트리스트로 좁힐 것).
 
 ## 프론트엔드 (디자인 시스템) — UI 작업 전 필독
 시안 PDF에서 추출한 디자인 시스템이 있다. **임의로 색/폰트/간격을 만들지 말고 토큰·가이드를 따른다.**
