@@ -1,58 +1,47 @@
-'use client';
+"use client";
 
-import { useRoleStore } from '@/store/useRoleStore';
-import Link from 'next/link';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { AuthGuard } from "@/components/AuthGuard";
+import { Button } from "@/components/ui";
 
 export default function Home() {
-  const { role } = useRoleStore();
+  return (
+    <AuthGuard>
+      <HomeInner />
+    </AuthGuard>
+  );
+}
+
+function HomeInner() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? ""));
+  }, []);
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
-      <h1 className="text-5xl font-black mb-12 tracking-tighter">AUTOPRODUCTS</h1>
-
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* 도매상 모드 뷰 */}
-        {role === 'wholesaler' && (
-          <div className="col-span-1 md:col-span-2 bg-gray-50 p-10 rounded-3xl border border-gray-200">
-            <h2 className="text-2xl font-bold mb-4">🏢 도매상 워크플로우</h2>
-            <p className="text-gray-600 mb-8">대량의 상품을 빠르게 등록하고 관리합니다.</p>
-            <Link 
-              href="/wholesaler/upload" 
-              className="inline-block bg-black text-white px-8 py-4 rounded-full font-bold hover:bg-gray-800 transition-colors"
-            >
-              엑셀 기반 대량 상품 등록 가기 ➔
-            </Link>
-          </div>
-        )}
-
-        {/* 소매상 모드 뷰 */}
-        {role === 'retailer' && (
-          <>
-            <div className="bg-gray-50 p-10 rounded-3xl border border-gray-200 hover:shadow-lg transition-shadow group">
-              <h2 className="text-2xl font-bold mb-4">📖 글로벌 카탈로그</h2>
-              <p className="text-gray-600 mb-8">VOGUE 스타일의 하이엔드 룩북에서 상품을 탐색하세요.</p>
-              <Link 
-                href="/retailer/catalog" 
-                className="inline-block bg-black text-white px-8 py-4 rounded-full font-bold group-hover:bg-gray-800 transition-colors"
-              >
-                카탈로그 탐색하기 ➔
-              </Link>
-            </div>
-
-            <div className="bg-gray-50 p-10 rounded-3xl border border-gray-200 hover:shadow-lg transition-shadow group">
-              <h2 className="text-2xl font-bold mb-4">🔴 라이브 방송 대시보드</h2>
-              <p className="text-gray-600 mb-8">방송 중 실시간 재고 차감 및 발주서를 관리합니다.</p>
-              <Link 
-                href="/retailer/live" 
-                className="inline-block bg-black text-white px-8 py-4 rounded-full font-bold group-hover:bg-gray-800 transition-colors"
-              >
-                라이브 패널 열기 ➔
-              </Link>
-            </div>
-          </>
-        )}
+    <main className="grid min-h-screen place-items-center bg-canvas px-6">
+      <div className="w-full max-w-md text-center">
+        <div className="font-serif text-3xl italic text-foreground">ezmerce</div>
+        <h1 className="mt-6 text-2xl font-extrabold text-foreground">로그인되었습니다</h1>
+        {email && <p className="mt-2 text-muted-foreground">{email}</p>}
+        <p className="mt-1 text-sm text-muted-foreground">
+          대시보드는 준비 중입니다. 관리자 승인 후 카탈로그·상품 관리가 제공됩니다.
+        </p>
+        <div className="mt-8">
+          <Button variant="secondary" onClick={logout}>
+            로그아웃
+          </Button>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

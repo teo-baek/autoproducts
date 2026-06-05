@@ -5,10 +5,15 @@ import { createClient } from "@supabase/supabase-js";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!url || !anon) {
-  // 개발 편의: env 누락 시 콘솔 경고(빌드는 통과). .env.local 채우면 됨.
+const missing = [
+  !url && "NEXT_PUBLIC_SUPABASE_URL",
+  !anon && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+].filter(Boolean);
+if (missing.length) {
+  // 이건 '프론트 전용' env(apps/web/.env.local). 백엔드 .env(SUPABASE_URL+SERVICE_KEY)와 별개다.
+  // 프론트엔 반드시 anon(public) 키를 넣는다 — service key 는 절대 금지(브라우저로 노출됨).
   console.warn(
-    "[ezmerce] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 가 비어있습니다. apps/web/.env.local 을 채우세요."
+    `[ezmerce] 누락된 프론트 env: ${missing.join(", ")} → apps/web/.env.local 에 채우세요 (anon=public 키).`
   );
 }
 
