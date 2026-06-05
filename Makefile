@@ -7,7 +7,7 @@ WEB_PORT := 3555
 API_PORT := 8444
 
 .DEFAULT_GOAL := help
-.PHONY: help dev web api front backend install web-install api-install test build stop ports migrate
+.PHONY: help dev web api front backend install build stop ports migrate
 
 help: ## 명령 목록 보기
 	@echo "ezmerce make 명령:"
@@ -31,16 +31,9 @@ web: ## 프론트만 실행 (Next :3555)
 
 front: web ## (별칭) 프론트 실행
 
-install: api-install web-install ## 백엔드+프론트 의존성 전체 설치
-
-api-install: ## 백엔드 의존성 (uv sync)
+install: ## 백엔드+프론트 의존성 설치 (uv + npm)
 	cd $(API_DIR) && uv sync --all-groups
-
-web-install: ## 프론트 의존성 (npm install)
 	cd $(WEB_DIR) && npm install
-
-test: ## 백엔드 테스트 (pytest)
-	cd $(API_DIR) && .venv/bin/python -m pytest -q
 
 build: ## 프론트 프로덕션 빌드 (next build)
 	cd $(WEB_DIR) && npm run build
