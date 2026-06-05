@@ -16,7 +16,8 @@
 - **화면 명세**: `apps/web/design/SCREEN-INVENTORY.md` (36화면 + 컴포넌트 인벤토리).
 - **이미지 자산**: `apps/web/public/{images,brand}/` + 인덱스 `apps/web/design/ASSET-MANIFEST.md`.
 - 폰트 = **Pretendard**(본문/헤딩) + **Playfair Display 이탤릭**(로고타입). 컴포넌트는 **shadcn/ui** 기준(토큰 매핑).
-- 색은 의미(시맨틱 토큰)로 쓴다: 상태 배지 = 승인 초록 / 대기 앰버 / 거절 빨강 / 정보 파랑 / 등급 연보라. **가격은 서버 권위**(아래 DB 규칙) — 프론트는 표시만.
+- 색은 의미(시맨틱 토큰)로 쓴다: 상태 배지 = 승인 초록 / 대기 앰버 / 거절 빨강 / 정보 파랑 / 등급 연보라.
+- **가격은 역할(권한)별로 다르게/미노출 — 서버 권위.** 프론트는 서버가 준 필드만 그대로 표시(미노출=`price:null`→"가격 문의", 0원/추론 금지). 응답 형태가 역할마다 다름. ⚠️ 상세·규칙: 아래 **§가격 노출** 필독.
 - ⚠️ 시안 범위 ⊃ 1차 백엔드(POS·주문·분석 등 미래분 포함). 구현은 PoC 범위부터(`TODO.md`). 시안의 템플릿 잔재(`VogueCore`, 무관 로고마크)는 쓰지 말 것.
 
 ## DB 규칙
@@ -29,9 +30,28 @@
 - **UNIQUE는 부분 인덱스**(`... WHERE deleted_at IS NULL`)로 둔다 → soft delete 후 같은 값 재등록 허용. 단 `products.platform_code`는 영구 식별자(QR 대상)라 전체 UNIQUE 유지(재사용 X).
 - "보관(`status='archived'`)"과 "삭제(`deleted_at`)"는 **다른 개념** — archived는 진열 내림(복구 쉬움), deleted_at은 제거.
 
-### 가격 노출
-- 가격은 **서버(FastAPI) 권위**로 결정. 클라이언트가 보낸 값 신뢰 금지.
-- `profiles.price_visibility`(관리자 설정, `wholesale|retail|none`) 우선, 미설정이면 `seller_type` 기본값 폴백. 로직: `app/services/pricing.py`.
+### 가격 노출 — 역할(권한)별 차등 ⚠️ 실수 잦은 부분
+**가격은 보는 사람의 역할/권한에 따라 다르게(또는 아예 안) 보여야 한다. 서버(FastAPI)가 권위적으로 셰이핑하며, 클라이언트가 보낸 값은 절대 신뢰 금지.** 단일 진실: `app/services/pricing.py`의 `visible_price()`.
+
+**결정 규칙** (우선순위 순):
+1. `wholesaler`(자기 조직 상품, `viewer_org == product_org`) / `admin` → **관리뷰: 도매가+판매가 둘 다**.
+2. 그 외(소매셀러/에이전시) → 관리자가 셀러별로 정한 `profiles.price_visibility`(`wholesale|retail|none`) **우선**, 미설정이면 `seller_type` 기준 기본값 폴백:
+   - `retail_seller` + `independent`(라이브셀러) → `wholesale`(도매가)
+   - `retail_seller` + `agency_affiliated`(에이전시 소속) → `none`(**미노출**)
+   - `agency` → `retail`(판매가)
+   - 그 외/미정 → `none`(**미노출**)
+
+**응답 형태가 역할마다 다르다 (프론트 필수 인지):**
+- 관리뷰(admin·도매 본인) → `{ "wholesale_price", "retail_price" }` (필드 2개)
+- 일반(노출 허용) → `{ "price": <number> }` (단일가, 도매/판매 중 무엇인지는 서버가 결정)
+- 미노출 → `{ "price": null }`
+- 공개 QR 카드(`GET /p/{code}`) → **가격 필드 자체가 없음**.
+
+**프론트 규칙(어기지 말 것):**
+- 가격을 **클라이언트에서 계산/추론하지 말 것**. 서버가 준 필드만 그대로 렌더.
+- `price: null`(미노출)을 **`0원`/빈값/공짜로 표시 금지** → "가격 문의" 등 명시적 미노출 UI. 도매가를 임의로 채우지 말 것.
+- 응답에 `wholesale_price`/`retail_price`가 있으면 관리뷰 전용 — **다른 역할 화면/캐시로 새어나가지 않게** 할 것.
+- 같은 셰이핑이 `GET /catalog` · `GET /catalog/export.xlsx`(엑셀)에도 동일 적용됨 — 별도 가격 가공 추가 금지.
 
 ### 레이어 (혼동 금지)
 - **도메인 엔티티** = `app/entities/` (`models.py` = DB 테이블 1:1 Pydantic 모델, `enums.py` = DB ENUM). Supabase dict ↔ 모델 변환·검증용.
