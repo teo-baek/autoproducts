@@ -52,6 +52,7 @@
 - `price: null`(미노출)을 **`0원`/빈값/공짜로 표시 금지** → "가격 문의" 등 명시적 미노출 UI. 도매가를 임의로 채우지 말 것.
 - 응답에 `wholesale_price`/`retail_price`가 있으면 관리뷰 전용 — **다른 역할 화면/캐시로 새어나가지 않게** 할 것.
 - 같은 셰이핑이 `GET /catalog` · `GET /catalog/export.xlsx`(엑셀)에도 동일 적용됨 — 별도 가격 가공 추가 금지.
+- **가격을 찍는 모든 출력 경로는 `visible_price()`를 통과시켜라** — 카탈로그·엑셀뿐 아니라 **추후 영수증·견적서·주문서 출력**도 동일. 소매업체 유형(`seller_type`)별 차등이 영수증에도 그대로 적용돼야 한다(예: **에이전시 소속 셀러 영수증엔 가격 미표시, 제품 정보만**). 새 출력 기능에서 셰이핑 우회/직접 컬럼 조회 금지. *(영수증 출력 자체는 아직 미구현 — Phase 2, `TODO.md`)*
 
 ### 레이어 (혼동 금지)
 - **도메인 엔티티** = `app/entities/` (`models.py` = DB 테이블 1:1 Pydantic 모델, `enums.py` = DB ENUM). Supabase dict ↔ 모델 변환·검증용.
@@ -61,6 +62,7 @@
 - **품번 정규화**: 플랫폼 글로벌 `products.platform_code`(SEQUENCE 발급) + 업체 스코프 `(wholesaler_id, source_p_number)` 유니크.
 - **도매업체(`wholesalers`)와 에이전시(`agencies`)는 별개 테이블.** `products`는 `wholesaler_id`만 가리킨다(에이전시가 상품 소유 불가).
 - 인증: Supabase Auth(`auth.users`) ↔ `profiles` 1:1. 역할/권한은 `profiles`.
+- **계정 역할**: `admin`(도소매 관리자) / `wholesaler`(도매) / `retail_seller`(소매셀러, `seller_type`=independent|agency_affiliated) / `agency`. **`admin` = 도소매 관리자 계정 = LALAS 연합 또는 에이전시 리더에게 제공**해 폐쇄망을 직접 관리 → 가입 **승인/거절·삭제** + 셀러별 **`price_visibility` 설정**(`require_role("admin")` 가드, `routers/admin.py`). 단 '조직 리더가 소속 셀러를 직접 위임 관리'(에이전시 셀프 운영 등)는 **Phase 2**(에이전시 1차 미운영).
 
 ### 1차 범위 메모
 - 대상: 라이브커머스 셀러만. **에이전시는 실운영 미구현**(역할/테이블/`agency_id` 데이터 모델만 forward-compat 준비). 일반 소매업체·주문/결제/배송·정산은 Phase 2+.
