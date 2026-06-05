@@ -6,6 +6,18 @@
 - 의존성: `backend/pyproject.toml` + `backend/uv.lock` (uv 표준). 설치/재현: `cd backend && uv sync --all-groups`. 추가는 `uv add <pkg>` (또는 dev/notebook 그룹: `uv add --group dev <pkg>`). `backend/requirements.txt`는 `uv export` **파생본**이라 직접 편집 금지.
 - 설계 문서/변경이력: `docs/features/2026-06-03-ezmerce-v2-backend/`
 - DB 마이그레이션: `backend/migrations/` (실행 순서: `_v2_core.sql` → `_02_price_visibility.sql` → `_03_soft_delete.sql`)
+- 프론트엔드: `apps/web/` (Next.js App Router + Tailwind v4). **UI/디자인 작업 전 디자인 가이드 필독** (아래 §프론트엔드).
+- **로컬 실행/포트**: 백엔드 `cd backend && .venv/bin/python -m app.main` → **:8444** (= `uvicorn app.main:app --reload --port 8444`, `PORT` env override 가능). 프론트 `cd apps/web && npm run dev` → **:3555**. 프론트→백엔드 호출 base URL = `http://localhost:8444` (env `NEXT_PUBLIC_API_BASE_URL`). CORS는 개발 중 `allow_origins=["*"]`(운영 전 화이트리스트로 좁힐 것).
+
+## 프론트엔드 (디자인 시스템) — UI 작업 전 필독
+시안 PDF에서 추출한 디자인 시스템이 있다. **임의로 색/폰트/간격을 만들지 말고 토큰·가이드를 따른다.**
+- **디자인 가이드**: `apps/web/design/DESIGN-SYSTEM.md` (미감·색·타이포·컴포넌트·레이아웃 셸 A~D·범위주의).
+- **토큰(소스 오브 트루스)**: `apps/web/src/styles/ezmerce-tokens.css` (Tailwind v4 `@theme`). 색/라운드/그림자/타입스케일은 여기 토큰 사용.
+- **화면 명세**: `apps/web/design/SCREEN-INVENTORY.md` (36화면 + 컴포넌트 인벤토리).
+- **이미지 자산**: `apps/web/public/{images,brand}/` + 인덱스 `apps/web/design/ASSET-MANIFEST.md`.
+- 폰트 = **Pretendard**(본문/헤딩) + **Playfair Display 이탤릭**(로고타입). 컴포넌트는 **shadcn/ui** 기준(토큰 매핑).
+- 색은 의미(시맨틱 토큰)로 쓴다: 상태 배지 = 승인 초록 / 대기 앰버 / 거절 빨강 / 정보 파랑 / 등급 연보라. **가격은 서버 권위**(아래 DB 규칙) — 프론트는 표시만.
+- ⚠️ 시안 범위 ⊃ 1차 백엔드(POS·주문·분석 등 미래분 포함). 구현은 PoC 범위부터(`TODO.md`). 시안의 템플릿 잔재(`VogueCore`, 무관 로고마크)는 쓰지 말 것.
 
 ## DB 규칙
 

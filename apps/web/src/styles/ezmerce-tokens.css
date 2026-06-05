@@ -1,0 +1,118 @@
+/* =============================================================================
+ * ezmerce — Design Tokens (from ezmerce.pdf 디자인 시안 추출, 2026-06-04)
+ * -----------------------------------------------------------------------------
+ * 색상은 시안 PDF 벡터 fill에서 정확히 추출한 값(rgb% → hex). 폰트는 PDF가
+ * Type3(이름없음) 임베드라 자동추출 불가 → 시각 식별 후 웹폰트 대응안.
+ *
+ * 사용법 (아직 자동 적용 안 됨 — 페이지 구현 시 연결):
+ *   globals.css 에서  @import "tailwindcss";  바로 아래에
+ *     @import "../styles/ezmerce-tokens.css";
+ *   를 추가하면 bg-primary / text-muted / rounded-lg 등 유틸리티가 생성된다.
+ *   폰트 로딩(next/font 또는 @font-face)은 DESIGN-SYSTEM.md "Typography" 참고.
+ *
+ * 자세한 의미/매핑: apps/web/design/DESIGN-SYSTEM.md
+ * ============================================================================= */
+
+@theme {
+  /* ---- Brand / Ink (deep navy scale) -------------------------------------- */
+  --color-ink: #041627;          /* primary 딥네이비 — 주요 버튼·브랜드·CTA */
+  --color-ink-strong: #0f172a;   /* 더 어두운 슬레이트 — 다크 셸 배경 */
+  --color-ink-800: #1a2b3c;      /* 네이비-800 */
+  --color-ink-700: #38485a;      /* 슬레이트-700 — 보조 다크 surface */
+  --color-ink-600: #545f72;      /* 슬레이트 — 보조 텍스트 */
+
+  /* ---- Neutrals (cool gray, 살짝 블루틴트) -------------------------------- */
+  --color-canvas: #f7f9fb;       /* 페이지 배경 off-white */
+  --color-surface: #ffffff;      /* 카드/패널 표면 */
+  --color-surface-muted: #f2f4f6;/* 보조 표면 / 비활성 탭 */
+  --color-subtle: #eceef0;       /* 인풋 배경 / subtle fill */
+  --color-divider: #e0e3e5;      /* 구분선 */
+  --color-border: #c4c6cd;       /* 기본 보더 */
+  --color-border-strong: #94a3b8;/* 강조 보더 / 아이콘 */
+
+  /* ---- Text -------------------------------------------------------------- */
+  --color-text: #191c1e;         /* 본문/헤딩 잉크 (near-black) */
+  --color-text-secondary: #44474c;/* 보조 텍스트 */
+  --color-text-muted: #545f72;   /* 약한 텍스트 */
+  --color-placeholder: #74777d;  /* placeholder */
+  --color-on-ink: #ffffff;       /* 다크 배경 위 텍스트 */
+
+  /* ---- Status: success (승인/활성) --------------------------------------- */
+  --color-success: #2f7d5a;
+  --color-success-solid: #619d7f;
+  --color-success-fg: #0e5138;   /* 배지 텍스트 */
+  --color-success-bg: #dcfce7;   /* 배지 배경 */
+  --color-success-bg-strong: #b1f0ce;
+
+  /* ---- Status: warning / pending (대기) ---------------------------------- */
+  --color-warning: #d97706;
+  --color-warning-solid: #fcd34d;
+  --color-warning-fg: #92400e;
+  --color-warning-bg: #fef3c7;
+
+  /* ---- Status: danger / reject (거절/위험) ------------------------------- */
+  --color-danger: #ba1a1a;
+  --color-danger-solid: #ef4444;
+  --color-danger-fg: #93000a;
+  --color-danger-bg: #ffdad6;
+
+  /* ---- Status: info (정보) ----------------------------------------------- */
+  --color-info: #2f6feb;
+  --color-info-fg: #1a3a7a;
+  --color-info-bg: #d2e4fb;
+
+  /* ---- Accent: grade / tier 배지 (연보라) -------------------------------- */
+  --color-grade-fg: #5b3fa0;
+  --color-grade-bg: #d1c4e9;
+
+  /* ---- Chart categorical palette ----------------------------------------- */
+  --color-chart-1: #1a2b3c;  /* navy   */
+  --color-chart-2: #619d7f;  /* sage   */
+  --color-chart-3: #94a3b8;  /* slate  */
+  --color-chart-4: #d97706;  /* amber  */
+  --color-chart-5: #ba1a1a;  /* red    */
+  --color-chart-6: #8f74c0;  /* violet */
+
+  /* ---- Semantic aliases (권장 사용) -------------------------------------- */
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-on-ink);
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-text);
+  --color-muted: var(--color-surface-muted);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-ring: #041627;
+
+  /* ---- Typography (폰트 로딩은 별도 — DESIGN-SYSTEM.md 참고) -------------- */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Helvetica Neue", "Segoe UI", "Malgun Gothic", sans-serif;
+  --font-serif: "Playfair Display", "Newsreader", "Apple SD Gothic Neo", Georgia, serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* type scale (1.250 major-third-ish, 시안 기준) */
+  --text-xs: 0.75rem;    /* 12 — helper/caption */
+  --text-sm: 0.8125rem;  /* 13 — label/secondary */
+  --text-base: 0.9375rem;/* 15 — body/input (시안 본문) */
+  --text-md: 1rem;       /* 16 — emphasized body */
+  --text-lg: 1.125rem;   /* 18 — subsection */
+  --text-xl: 1.375rem;   /* 22 — card title */
+  --text-2xl: 1.875rem;  /* 30 — page title (환영합니다) */
+  --text-3xl: 2.25rem;   /* 36 — section hero */
+  --text-display: 4rem;  /* 64 — marketing hero (Elevate your…) */
+
+  /* ---- Radius (시안: 인풋/버튼 ~8px, 카드 ~12–16px) ---------------------- */
+  --radius-sm: 0.375rem; /* 6  */
+  --radius: 0.5rem;      /* 8  — 기본 (인풋/버튼) */
+  --radius-md: 0.625rem; /* 10 */
+  --radius-lg: 0.75rem;  /* 12 — 카드 */
+  --radius-xl: 1rem;     /* 16 — 큰 카드/모달 */
+  --radius-2xl: 1.5rem;  /* 24 */
+  --radius-full: 9999px;
+
+  /* ---- Shadow (절제된 soft elevation) ------------------------------------ */
+  --shadow-xs: 0 1px 2px 0 rgb(4 22 39 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(4 22 39 / 0.06), 0 1px 2px -1px rgb(4 22 39 / 0.06);
+  --shadow-md: 0 4px 12px -2px rgb(4 22 39 / 0.08), 0 2px 6px -2px rgb(4 22 39 / 0.06);
+  --shadow-lg: 0 12px 32px -8px rgb(4 22 39 / 0.12), 0 6px 12px -6px rgb(4 22 39 / 0.08);
+}
+
+/* 라이트 단일 테마 기준(시안). 다크모드는 미정 — DESIGN-SYSTEM.md "결정 필요" 참고. */

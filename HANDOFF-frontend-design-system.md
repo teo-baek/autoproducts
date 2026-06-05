@@ -2,6 +2,12 @@
 
 > 다음 세션은 이 파일 경로로 시작: `HANDOFF-frontend-design-system.md`
 > 작성: 2026-06-04 / 브랜치: `v2-dev` / 백엔드 상태·API는 [HANDOFF.md](HANDOFF.md), 할 일 전체는 [TODO.md](TODO.md) 참고.
+>
+> ✅ **디자인 추출 완료(2026-06-04)** — 시안 PDF에서 디자인 시스템·이미지 추출됨. 산출물:
+> - 디자인 시스템: [`apps/web/design/DESIGN-SYSTEM.md`](apps/web/design/DESIGN-SYSTEM.md) (색/타이포/컴포넌트/셸)
+> - 토큰(바로 사용): [`apps/web/src/styles/ezmerce-tokens.css`](apps/web/src/styles/ezmerce-tokens.css) (Tailwind v4 `@theme`)
+> - 36화면 인벤토리: [`apps/web/design/SCREEN-INVENTORY.md`](apps/web/design/SCREEN-INVENTORY.md)
+> - 이미지 자산: `apps/web/public/{images,brand}/` + [`apps/web/design/ASSET-MANIFEST.md`](apps/web/design/ASSET-MANIFEST.md)
 
 ## 🎯 Goal
 **apps/web 의 프론트엔드 디자인 시스템을 구축**한다 — 디자인 토큰(컬러/타이포/스페이싱/라운드/섀도) + 한글 폰트 + 기본 컴포넌트 라이브러리 + 역할별 레이아웃 토대. 이후 PoC/MVP 화면(상품등록·업로드·카탈로그·QR카드·관리자)을 이 시스템 위에 얹는다.
@@ -17,18 +23,16 @@
 - 라우트(App Router): `/`(page), `/wholesaler/upload`, `/retailer/catalog`, `/retailer/live`
 - `src/components/RoleToggle.tsx`, `src/store/useRoleStore.ts`(zustand 역할 토글)
 - `src/app/globals.css`: `@import "tailwindcss"` + `@theme inline` + `--background/--foreground`, `--font-geist-*`. body 폰트는 Arial 폴백(= **한글 폰트 미적용**).
-- 실행: `cd apps/web && npm run dev` (package-lock 기준 npm).
+- 실행: `cd apps/web && npm run dev` (package-lock 기준 npm) → **localhost:3555**. 백엔드 = **localhost:8444** (`NEXT_PUBLIC_API_BASE_URL=http://localhost:8444`).
 
 > ⚠️ **최상위 `web/` 디렉토리는 떠돌이 빌드 산출물**(.next/node_modules/tsbuildinfo만, 소스 없음). 이미 .gitignore 처리됨. 헷갈리지 말 것 — 실제 프론트는 **apps/web**. (정리하려면 `rm -rf web/` 해도 무방)
 
-## 🎨 디자인 소스 (Figma) — ⚠️ 접근 막힘
-- 파일: **https://www.figma.com/design/qptdNAvYvLVwNdbedQtile/ezmerce?node-id=0-1**
-- Figma MCP 연동돼 있으나 **접근 불가**. 원인: MCP 인증 계정 = **`jslee@goldenplanet.co.kr`**(팀 "이진섭의 팀", **View 시트 / Starter**)가 이 파일 권한 없음. + View/Starter는 MCP 읽기 **월 6회** 제한.
-- **해결(다음 세션 시작 전 택1)**:
-  1. Figma에서 파일을 **`jslee@goldenplanet.co.kr` 에 공유**(+가능하면 Dev/Full 시트로).
-  2. **접근 권한 있는 계정으로 MCP 재인증**(`/mcp` → Figma).
-  3. **PNG/PDF export 해서 채팅에 붙이기**(가장 빠름, 권한 불필요). `File → Export frames to PDF` 추천.
-- 접근되면 도구: `mcp__claude_ai_Figma__get_metadata`(구조) → `get_screenshot`(시각) → `get_design_context`(코드/토큰). 스킬 `/figma-generate-design`, `/figma-use`(use_figma 전 필수).
+## 🎨 디자인 소스 — ✅ PDF 추출로 해소됨
+- 시안 PDF(`~/Downloads/ezmerce.pdf`, 36p)를 받아 **디자인 시스템·이미지 전량 추출 완료**(Figma 접근 불필요).
+  - 색상: PDF 벡터 fill에서 정확 추출(rgb%→hex) → `ezmerce-tokens.css`.
+  - 폰트: PDF가 Type3(이름없음) 임베드라 자동추출 불가 → 시각 식별 + 웹폰트 대응안(Pretendard + Playfair Display) — DESIGN-SYSTEM.md §2.
+  - 이미지: 348개→중복제거 192→큐레이션 22개(`public/images`·`public/brand`).
+- (참고) 원본 Figma: https://www.figma.com/design/qptdNAvYvLVwNdbedQtile/ezmerce — 추후 직접 동기화가 필요하면 MCP 계정(`jslee@goldenplanet.co.kr`, View/Starter) 권한·재인증 해결 필요. 현재 작업엔 불필요.
 
 ## 🔌 연동할 백엔드 API (이미 완성·라이브 검증됨)
 FastAPI, **JWT(Supabase JWKS) 인증**, 가격은 서버에서 역할별 셰이핑. 라우트 16개:
@@ -54,12 +58,13 @@ FastAPI, **JWT(Supabase JWKS) 인증**, 가격은 서버에서 역할별 셰이�
 - **반응형 기준**: 데스크톱(관리/업로드) vs 모바일(QR 카드는 인스타 비율 9:16 계열).
 
 ## 🔜 Next Steps (디자인 시스템 구축 순서 제안)
-1. **Figma 접근 해결**(공유/재인증/Export) → 토큰 추출(color/type/space/radius/shadow) + 핵심 화면 시안 확보.
-2. **컴포넌트 라이브러리 결정·설치**(shadcn/ui 추천) + **Tailwind v4 `@theme` 토큰 매핑**(globals.css 정비).
-3. **한글 폰트 적용**(Pretendard 등) + 타이포 스케일 정의.
-4. **기본 컴포넌트** 구축: Button/Input/Select/Textarea/Checkbox/Card/Table/Badge/Tabs/Toast/Dialog/FileDropzone + 역할별 레이아웃(셀러/도매/admin 셸).
-5. (선택) `/design` 미리보기 페이지 또는 Storybook 으로 컴포넌트 카탈로그.
-6. 기존 스캐폴드 라우트(role 토글/업로드/카탈로그/라이브)를 디자인 시스템으로 재정비 → 이후 화면 구현.
+1. ~~Figma 접근 해결 → 토큰 추출~~ **✅ 완료** (PDF에서 토큰/이미지 추출 → `ezmerce-tokens.css`, `DESIGN-SYSTEM.md`).
+2. **한글 폰트 설치·로딩**(Pretendard + Playfair Display) → `globals.css` body 폰트 교체(현재 Arial 폴백). DESIGN-SYSTEM §2.2.
+3. **`globals.css`에 `@import "../styles/ezmerce-tokens.css";` 추가** → `bg-primary`/`text-muted`/`rounded-lg` 등 유틸리티 활성.
+4. **컴포넌트 라이브러리 설치**(shadcn/ui 추천, 스킬 `vercel:shadcn`) → 테마를 본 토큰에 매핑.
+5. **기본 컴포넌트** 구축: Button/Input/Select/Textarea/Checkbox/Card/Table/Badge(상태색 §1.4)/Tabs/Toast/Dialog/Popover/FileDropzone + 셸 A~D(인증스플릿/다크어드민/스토어프론트/에이전시).
+6. (선택) `/design` 미리보기 페이지로 컴포넌트 카탈로그.
+7. 기존 스캐폴드 라우트를 디자인 시스템으로 재정비 → PoC 화면(로그인/가입·상품등록·업로드·QR카드) 구현.
 
 ## 🛠 유용한 스킬/도구
 - `vercel:shadcn`(shadcn 설치/구성), `frontend-design`(고품질 UI), `vercel:nextjs`(App Router), `supabase`(Auth 클라이언트/SSR), `figma-generate-design`·`figma-use`(MCP, 접근 해결 후).
