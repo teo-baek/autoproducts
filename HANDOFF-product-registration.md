@@ -12,6 +12,16 @@
 - **대시보드/고객/주문/카탈로그** = `ComingSoon`("준비 중") 플레이스홀더.
 - **백엔드 보강**: `GET /products`(목록·관리뷰 가격)·`GET /products/{id}`·`PUT /products/{id}/skus`(SKU 교체)·`GET /products/export.xlsx`·`GET /uploads/jobs`·`GET /auth/me` + `products.category` 컬럼/스키마.
 
+### 🔍 갭 점검 보강 (2026-06-06 2차 — 기획서 재대조)
+- **대시보드 = 제품 업로드 내역** 구현(`app/(dash)/dashboard/page.tsx`): KPI(등록/보관 상품·업로드 작업 수) + 최근 업로드 잡 테이블(`GET /uploads/jobs`). *(기획자: "당장 필요하면 업로드 내역 정도, 재량껏")*
+- **데이터 검증 필드(FIELD) 단위 보고** — `excel_parse.py` 가 행이 아니라 **(행·필드·사유)** 로 검증(도매가 "숫자 형식이 아닙니다" / 상품명·품번 "필수 값이 누락되었습니다"). 마법사 3단계 표에 **필드 컬럼** 추가(시안과 일치).
+- **이미지 업로드 — 지원 안되는 형식 건수** 노출(jpg/png 외 제외 시 경고 배지).
+
+### ⏸ 의도적 보류 (1차 범위 외 — 기획서엔 있으나 미구현)
+- **구글 드라이브 연결**(시안 9p, 이미지 소스 옵션) — OAuth/Drive API 대형 연동 → **Phase 2**. 현재는 이미지 직접 업로드로 대체.
+- **ZIP 이미지 일괄 업로드** — 서버 압축해제 필요 → 보류(개별 JPG/PNG 다중선택은 지원).
+- 이미지 해상도 경고·고객지원 버튼 등 데코 요소 — 기능 영향 없어 생략.
+
 ### ⚠️ 사용자가 직접 해야 동작 (2가지)
 1. **마이그레이션 `_07` 실행** — `backend/migrations/2026-06-06_v2_core_07_product_category.sql` (Supabase SQL Editor). 안 하면 카테고리 탭/단일등록 카테고리 선택만 영향(나머지는 정상).
 2. **`product-images` Storage 버킷 생성(공개 권장)** — 대시보드 Storage → New bucket `product-images`, Public ✓. 안 하면 이미지 업로드만 실패(상품 데이터 등록은 정상).

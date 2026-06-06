@@ -46,6 +46,7 @@ export default function BulkPage() {
 
   // step 1
   const [images, setImages] = useState<ImgItem[]>([]);
+  const [skipped, setSkipped] = useState(0); // 지원 안되는 형식(jpg/png 외) 제외 건수
   const [attaching, setAttaching] = useState(false);
   const [attachResult, setAttachResult] = useState<{ matched: string[]; unmatched: string[] } | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
@@ -77,7 +78,9 @@ export default function BulkPage() {
   async function addImages(files: FileList | null) {
     if (!files || !wid) return;
     setImgFailed(false);
-    const list = Array.from(files).filter((f) => /\.(jpe?g|png)$/i.test(f.name));
+    const all = Array.from(files);
+    const list = all.filter((f) => /\.(jpe?g|png)$/i.test(f.name));
+    if (all.length - list.length > 0) setSkipped((s) => s + (all.length - list.length));
     const start = images.length;
     setImages((prev) => [
       ...prev,
@@ -126,6 +129,7 @@ export default function BulkPage() {
     setIngest(null);
     setIngestErr(null);
     setImages([]);
+    setSkipped(0);
     setAttachResult(null);
     setImgFailed(false);
   }
@@ -171,6 +175,7 @@ export default function BulkPage() {
         ) : (
           <StepImage
             images={images}
+            skipped={skipped}
             onAdd={addImages}
             onRemove={(i) => setImages((prev) => prev.filter((_, j) => j !== i))}
             attaching={attaching}
@@ -289,6 +294,7 @@ function StepFile({
 /* ── Step 2: 이미지 업로드 ───────────────────────────────────────────────── */
 function StepImage({
   images,
+  skipped,
   onAdd,
   onRemove,
   attaching,
@@ -296,6 +302,7 @@ function StepImage({
   onNext,
 }: {
   images: ImgItem[];
+  skipped: number;
   onAdd: (f: FileList | null) => void;
   onRemove: (i: number) => void;
   attaching: boolean;
@@ -326,6 +333,13 @@ function StepImage({
         className="hidden"
         onChange={(e) => onAdd(e.target.files)}
       />
+
+      {skipped > 0 && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-fg)]">
+          <AlertTriangle width={16} height={16} className="mt-0.5 shrink-0" />
+          지원되지 않는 형식 {skipped}건이 제외되었습니다. (JPG·PNG만 허용)
+        </div>
+      )}
 
       {images.length > 0 && (
         <div className="mt-6">
@@ -467,7 +481,7 @@ function StepValidate({
           <thead>
             <tr className="border-b border-divider bg-surface-muted text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <th className="px-5 py-3">행 (Row)</th>
-              <th className="px-5 py-3">품번 (Code)</th>
+              <th className="px-5 py-3">필드 (Field)</th>
               <th className="px-5 py-3">오류 내용 (Error Description)</th>
             </tr>
           </thead>
@@ -482,7 +496,9 @@ function StepValidate({
               errors.slice(0, 50).map((e, i) => (
                 <tr key={i} className="border-b border-divider/70 last:border-0">
                   <td className="px-5 py-3.5 text-muted-foreground">{e.row != null ? `${e.row}행` : "—"}</td>
-                  <td className="px-5 py-3.5 font-mono text-muted-foreground">{e.source_p_number ?? "—"}</td>
+                  <td className="px-5 py-3.5 font-medium text-foreground">
+                    {e.field ?? (e.source_p_number ? `품번 ${e.source_p_number}` : "—")}
+                  </td>
                   <td className="px-5 py-3.5 font-medium text-[var(--color-danger-fg)]">{e.reason}</td>
                 </tr>
               ))

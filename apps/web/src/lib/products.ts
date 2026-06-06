@@ -129,7 +129,7 @@ export const deleteProduct = (id: string) =>
 export type IngestResult = {
   job_id: string;
   created: unknown[];
-  errors: { row?: number; reason: string; source_p_number?: string }[];
+  errors: { row?: number; field?: string; reason: string; source_p_number?: string }[];
 };
 
 export function uploadExcel(file: File): Promise<IngestResult> {
