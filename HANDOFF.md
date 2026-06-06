@@ -1,6 +1,6 @@
 # HANDOFF — ezmerce v2 백엔드 (1차)
 
-> 🔭 **다음 작업 = 프론트 디자인 시스템** → [HANDOFF-frontend-design-system.md](HANDOFF-frontend-design-system.md) 로 시작. (이 문서는 백엔드 상태/인계)
+> 🔭 **다음 작업 = 도매상 상품 등록(프론트)** → [HANDOFF-product-registration.md](HANDOFF-product-registration.md) 로 시작. (인증·디자인시스템 완료 — [HANDOFF-frontend-design-system.md](HANDOFF-frontend-design-system.md) 참고. 이 문서는 백엔드 상태/인계)
 > 새 세션은 이 파일 경로만 주고 시작하면 됩니다: `HANDOFF.md`
 > 최종 갱신: 2026-06-04 / 브랜치: **`v2-dev`** / 단위 **65 passed** / **라이브 스모크 24 PASS·0 FAIL** / `_05` 적용됨 / 비즈니스 라우트 **16개**(+health)
 
