@@ -17,7 +17,14 @@ def _is_duplicate_email(e: Exception) -> bool:
 
 
 def approve_account(repo, target_id: str, admin_id: str) -> dict:
-    return repo.set_status(target_id, "approved", admin_id)
+    """승인 처리. 도매(wholesaler) 계정이 아직 도매업체에 연결돼 있지 않으면
+    도매업체 행을 자동 생성해 wholesaler_id 로 연결한다(상품 API 가 wholesaler_id 필요)."""
+    prof = repo.get_profile(target_id)
+    wholesaler_id = None
+    if prof and prof.get("role") == "wholesaler" and not prof.get("wholesaler_id"):
+        name = prof.get("company_name") or prof.get("full_name") or "도매업체"
+        wholesaler_id = repo.create_wholesaler(name)["id"]
+    return repo.set_status(target_id, "approved", admin_id, wholesaler_id=wholesaler_id)
 
 def reject_account(repo, target_id: str, admin_id: str) -> dict:
     return repo.set_status(target_id, "rejected", admin_id)

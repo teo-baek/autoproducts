@@ -2,16 +2,16 @@
 
 import type { ReactNode } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
-import { WholesalerGate } from "@/components/WholesalerGate";
+import { AccessGate } from "@/components/AccessGate";
 import { Shell } from "@/components/Shell";
 
-/** 백오피스(셸-B) 공통 레이아웃 — 로그인 가드 + 도매 역할 게이트 + 사이드바/탑바. */
+/** 백오피스(셸-B) 공통 레이아웃 — 로그인 가드 + 접근 게이트(도매/관리자) + 사이드바/탑바. */
 export default function DashLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
-      <WholesalerGate>
+      <AccessGate>
         <Shell>{children}</Shell>
-      </WholesalerGate>
+      </AccessGate>
     </AuthGuard>
   );
 }

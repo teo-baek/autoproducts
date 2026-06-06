@@ -4,7 +4,7 @@
 
 ## ✅ 구현 완료 (2026-06-06, `도매상_상품등록.pdf` 시안 기준)
 **도매 상품관리 화면 전체 + 백엔드 보강 완료.** 백엔드 **78 tests pass**, 프론트 **next build·lint 통과**.
-- **셸-B**(다크 사이드바 백오피스) — `components/Shell.tsx` + `app/(dash)/layout.tsx`(AuthGuard + 도매 역할 게이트 `WholesalerGate`).
+- **셸-B**(다크 사이드바 백오피스) — `components/Shell.tsx` + `app/(dash)/layout.tsx`(AuthGuard + 접근 게이트 `AccessGate`: 도매 승인 OR 관리자).
 - **상품 데이터 관리 목록** — `app/(dash)/products/page.tsx`: 분류 탭(전체/의류/잡화)·페이지네이션·엑셀 다운로드·상품 업로드 팝오버(단일/대량/미매칭)·관리모드(수정·보관/복구·삭제).
 - **단일 상품 등록/수정 모달** — `components/SingleProductModal.tsx`: 색상×사이즈 → SKU 매트릭스, 이미지 직접 업로드.
 - **대량 등록 마법사(4스텝)** — `app/(dash)/products/bulk/page.tsx`: 파일→이미지→검증→완료 + 이미지 실패 상태. `components/Stepper.tsx`.
@@ -16,6 +16,12 @@
 - **대시보드 = 제품 업로드 내역** 구현(`app/(dash)/dashboard/page.tsx`): KPI(등록/보관 상품·업로드 작업 수) + 최근 업로드 잡 테이블(`GET /uploads/jobs`). *(기획자: "당장 필요하면 업로드 내역 정도, 재량껏")*
 - **데이터 검증 필드(FIELD) 단위 보고** — `excel_parse.py` 가 행이 아니라 **(행·필드·사유)** 로 검증(도매가 "숫자 형식이 아닙니다" / 상품명·품번 "필수 값이 누락되었습니다"). 마법사 3단계 표에 **필드 컬럼** 추가(시안과 일치).
 - **이미지 업로드 — 지원 안되는 형식 건수** 노출(jpg/png 외 제외 시 경고 배지).
+
+### 🛠 미니 어드민 가입 승인 (2026-06-06 3차)
+- **`고객 관리`(`/customers`)가 역할 인식** — 관리자 로그인 시 **가입 승인 화면**(대기/승인/거절 탭 + 회사명·담당자·역할·유형·신청일 + 승인/거절), 도매 로그인 시 "준비 중".
+- **도매 승인 시 도매업체 자동 생성·연결** — `POST /admin/accounts/{uid}/approve` 가 role=wholesaler·`wholesaler_id` 미설정이면 `wholesalers` 행을 회사명으로 생성해 연결(`approve_account` 서비스). → **승인만 하면 바로 상품등록 가능**(예전 'no wholesaler' 갭 해소).
+- 로그인/루트 진입 **역할별 리다이렉트**: 관리자 → `/customers`, 그 외 → `/products`.
+- **관리자 계정 만들기**(자가가입 불가): 아무 계정 가입 후 SQL — `update profiles set role='admin', status='approved' where id=(select id from auth.users where email='관리자@example.com');`
 
 ### ⏸ 의도적 보류 (1차 범위 외 — 기획서엔 있으나 미구현)
 - **구글 드라이브 연결**(시안 9p, 이미지 소스 옵션) — OAuth/Drive API 대형 연동 → **Phase 2**. 현재는 이미지 직접 업로드로 대체.

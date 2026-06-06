@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getMe } from "@/lib/products";
 import { AuthShell } from "@/components/AuthShell";
 import { Alert, Button, Checkbox, TextField } from "@/components/ui";
 import { Eye, EyeOff, Lock, Mail } from "@/components/icons";
@@ -36,7 +37,13 @@ export default function LoginPage() {
       }
       return;
     }
-    router.push("/products");
+    // 역할별 진입점: 관리자 → 고객 관리(승인), 그 외 → 상품 관리
+    try {
+      const me = await getMe();
+      router.push(me.role === "admin" ? "/customers" : "/products");
+    } catch {
+      router.push("/products");
+    }
   }
 
   return (

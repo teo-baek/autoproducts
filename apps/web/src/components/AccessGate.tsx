@@ -16,10 +16,11 @@ type GateState =
   | { status: "error"; msg: string };
 
 /**
- * 도매 회원 전용 게이트 — `/auth/me` 로 역할/승인상태 확인.
- * 도매 + 승인 → 통과. 그 외/미승인/오류 → 안내 화면(상품 API 는 백엔드에서도 403).
+ * 백오피스 접근 게이트 — `/auth/me` 로 역할/상태 확인.
+ * 통과: 관리자(admin) OR 승인된 도매(wholesaler+approved).
+ * 그 외/미승인/오류 → 안내 화면. (각 API 는 백엔드에서도 역할 가드)
  */
-export function WholesalerGate({ children }: { children: ReactNode }) {
+export function AccessGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<GateState>({ status: "loading" });
 
@@ -28,7 +29,8 @@ export function WholesalerGate({ children }: { children: ReactNode }) {
     getMe()
       .then((me) => {
         if (!active) return;
-        if (me.role !== "wholesaler") setState({ status: "denied", me });
+        if (me.role === "admin") setState({ status: "ok", me });
+        else if (me.role !== "wholesaler") setState({ status: "denied", me });
         else if (me.status !== "approved") setState({ status: "pending", me });
         else setState({ status: "ok", me });
       })
@@ -57,8 +59,8 @@ export function WholesalerGate({ children }: { children: ReactNode }) {
 
   const copy: Record<string, { title: string; body: string }> = {
     denied: {
-      title: "도매 회원 전용 영역입니다",
-      body: "상품 관리는 도매(Wholesaler) 계정으로만 이용할 수 있습니다. 다른 계정으로 로그인해 주세요.",
+      title: "접근 권한이 없습니다",
+      body: "이 영역은 도매(Wholesaler) 또는 관리자(Admin) 계정만 이용할 수 있습니다. 다른 계정으로 로그인해 주세요.",
     },
     pending: {
       title: "관리자 승인 대기 중",

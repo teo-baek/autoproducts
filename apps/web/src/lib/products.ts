@@ -87,6 +87,37 @@ export const CATEGORY_OPTIONS = [
 /* ── 사용자 ─────────────────────────────────────────────────────────────── */
 export const getMe = () => api<Me>("/auth/me", { auth: true });
 
+/* ── 관리자(admin) — 계정 승인 ─────────────────────────────────────────── */
+export type Account = {
+  id: string;
+  role: string;
+  status: string;
+  seller_type: string | null;
+  company_name: string | null;
+  full_name: string | null;
+  wholesaler_id: string | null;
+  price_visibility: string | null;
+  created_at?: string | null;
+};
+
+export const listAccounts = (status: string) =>
+  api<Account[]>(`/admin/accounts?status=${encodeURIComponent(status)}`, { auth: true });
+export const approveAccount = (uid: string) =>
+  api(`/admin/accounts/${uid}/approve`, { method: "POST", auth: true });
+export const rejectAccount = (uid: string) =>
+  api(`/admin/accounts/${uid}/reject`, { method: "POST", auth: true });
+
+export const ROLE_LABEL: Record<string, string> = {
+  admin: "관리자",
+  wholesaler: "도매",
+  retail_seller: "소매셀러",
+  agency: "에이전시",
+};
+export const SELLER_TYPE_LABEL: Record<string, string> = {
+  independent: "라이브셀러",
+  agency_affiliated: "에이전시 소속",
+};
+
 /* ── 상품 CRUD ──────────────────────────────────────────────────────────── */
 export function listProducts(params: {
   limit?: number;
