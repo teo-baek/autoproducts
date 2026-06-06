@@ -1,0 +1,148 @@
+"use client";
+
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import {
+  Bell,
+  Book,
+  Box,
+  Cart,
+  Dashboard,
+  Help,
+  LogOut,
+  Search,
+  Settings,
+  Users,
+} from "./icons";
+
+type NavItem = { href: string; label: string; icon: typeof Box };
+
+const NAV: NavItem[] = [
+  { href: "/dashboard", label: "대시보드", icon: Dashboard },
+  { href: "/products", label: "상품 관리", icon: Box },
+  { href: "/customers", label: "고객 관리", icon: Users },
+  { href: "/orders", label: "주문 관리", icon: Cart },
+  { href: "/catalog", label: "카탈로그 관리", icon: Book },
+];
+
+/**
+ * 셸-B — 다크 사이드바 백오피스 (DESIGN-SYSTEM 셸 B).
+ * 좌: #0F172A 사이드바(브랜드+내비+하단 유틸), 우: 라이트 콘텐츠(탑바 + children).
+ */
+export function Shell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
+  return (
+    <div className="flex min-h-screen bg-canvas">
+      {/* ── 사이드바 ── */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-ink-strong text-white lg:flex">
+        <div className="flex items-center gap-3 px-6 py-6">
+          <span className="flex size-9 items-center justify-center rounded-full bg-white/10 font-serif text-lg italic">
+            e
+          </span>
+          <div>
+            <div className="font-serif text-xl italic leading-none">ezmerce</div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/40">
+              Basic Plan
+            </div>
+          </div>
+        </div>
+
+        <nav className="mt-2 flex-1 space-y-1 px-3">
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active = isActive(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`relative flex items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium transition ${
+                  active
+                    ? "bg-white/[0.08] text-white"
+                    : "text-white/55 hover:bg-white/5 hover:text-white/90"
+                }`}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[var(--color-success-solid)]" />
+                )}
+                <Icon width={18} height={18} />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="space-y-1 border-t border-white/10 px-3 py-4">
+          <SideUtil icon={Settings} label="설정" />
+          <SideUtil icon={Help} label="고객 지원" />
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium text-white/55 transition hover:bg-white/5 hover:text-white/90"
+          >
+            <LogOut width={18} height={18} />
+            로그아웃
+          </button>
+        </div>
+      </aside>
+
+      {/* ── 메인 ── */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-divider bg-surface px-5 sm:px-8">
+          <div className="relative w-full max-w-xl">
+            <Search
+              width={18}
+              height={18}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-border-strong"
+            />
+            <input
+              type="search"
+              placeholder="주문, 고객, 상품 검색..."
+              className="w-full rounded-[var(--radius)] border border-border bg-subtle py-2.5 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-placeholder focus:border-ink focus:ring-2 focus:ring-ink/15"
+            />
+          </div>
+          <div className="ml-auto flex items-center gap-4">
+            <button
+              type="button"
+              className="text-muted-foreground transition hover:text-foreground"
+              aria-label="알림"
+            >
+              <Bell width={20} height={20} />
+            </button>
+            <span className="h-6 w-px bg-divider" />
+            <button
+              type="button"
+              title="POS — 준비 중 (Phase 2)"
+              className="rounded-[var(--radius)] bg-ink px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-strong"
+            >
+              POS
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 px-5 py-8 sm:px-8 lg:px-10">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+function SideUtil({ icon: Icon, label }: { icon: typeof Box; label: string }) {
+  return (
+    <button
+      type="button"
+      title={`${label} — 준비 중`}
+      className="flex w-full items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium text-white/55 transition hover:bg-white/5 hover:text-white/90"
+    >
+      <Icon width={18} height={18} />
+      {label}
+    </button>
+  );
+}
