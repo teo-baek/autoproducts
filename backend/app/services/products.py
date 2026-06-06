@@ -3,7 +3,7 @@ from app.schemas.product import ProductCreate
 
 def register_product(repo, wholesaler_id: str, payload: ProductCreate, created_by: str | None = None) -> dict:
     code = repo.next_platform_code()
-    product = repo.insert_product({
+    row = {
         "wholesaler_id": wholesaler_id,
         "created_by": created_by,  # 누가 등록했는지
         "platform_code": code,
@@ -13,7 +13,10 @@ def register_product(repo, wholesaler_id: str, payload: ProductCreate, created_b
         "origin": payload.origin,
         "lead_time_days": payload.lead_time_days,
         "description": payload.description,
-    })
+    }
+    if payload.category is not None:        # 마이그레이션 _07 미적용 환경 보호 — 값 있을 때만 포함
+        row["category"] = payload.category
+    product = repo.insert_product(row)
     repo.insert_skus([{**s.model_dump(), "product_id": product["id"]} for s in payload.skus])
     return product
 

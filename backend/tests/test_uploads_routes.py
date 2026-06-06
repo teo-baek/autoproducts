@@ -35,6 +35,9 @@ class FakeUploadRepo:
     def get_upload_job(self, jid):
         return next((j for j in self.jobs if j["id"] == jid), None)
 
+    def list_jobs(self, wid, limit=20):
+        return [j for j in self.jobs if j.get("wholesaler_id") == wid][:limit]
+
     def products_pnum_map(self, wid):
         return dict(self._pmap)
 
@@ -128,6 +131,21 @@ def test_unmatched_and_manual_match_routes(monkeypatch):
         assert m.status_code == 200 and m.json()["match_status"] == "matched"
         bad = c.post("/uploads/job-1/match", json={"image_id": "img1", "source_p_number": "NOPE"})
         assert bad.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_jobs_scoped_to_owner(monkeypatch):
+    shared = FakeUploadRepo()
+    shared.jobs.append({"id": "job-1", "wholesaler_id": "w1", "status": "completed"})
+    shared.jobs.append({"id": "job-9", "wholesaler_id": "w9", "status": "completed"})
+    monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
+    app.dependency_overrides[get_current_user] = _wholesaler
+    try:
+        res = TestClient(app).get("/uploads/jobs")
+        assert res.status_code == 200
+        jobs = res.json()["jobs"]
+        assert [j["id"] for j in jobs] == ["job-1"]      # 타 업체(w9) 제외
     finally:
         app.dependency_overrides.clear()
 

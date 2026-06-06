@@ -11,6 +11,11 @@ Supabase **SQL Editor**에 아래 파일들을 **순서대로** 붙여넣어 실
 4. `2026-06-03_v2_core_04_audit.sql` — 감사 컬럼(`created_by`/`updated_by`/`updated_at`) + `set_updated_at` 트리거
 5. `2026-06-03_v2_core_05_platform_code_fn.sql` — `public.next_platform_seq()` RPC 함수(상품 등록 시 platform_code 발급용)
 6. `2026-06-05_v2_core_06_register_fields.sql` — 회원가입 확장: `profiles.company_name`/`business_cert_path`/`id_doc_path` + 비공개 `business-docs` 버킷
+7. `2026-06-06_v2_core_07_product_category.sql` — 상품 분류 `products.category`(의류/잡화 등) + 부분 인덱스. 도매 상품관리 목록 필터·단일 등록 모달용. **(상품관리 화면의 카테고리 기능에 필요)**
+
+## Storage 버킷 (대시보드 또는 SQL)
+- **`product-images`** — 상품 이미지 업로드용. **공개(public) 권장**(상품 사진은 카탈로그 노출이 목적). 프론트가 직접 업로드 → `representative_image_url`(public URL) 저장 + 매니페스트 매칭. 미생성 시 단일/대량 등록의 이미지 업로드만 실패(상품 데이터 등록은 정상).
+  - 대시보드: Storage → New bucket → name `product-images`, Public ✓.
 
 ## 주의
 - `_RESET_public.sql`은 **비가역**(데이터 영구 삭제). 올바른 프로젝트인지 확인 후 실행.

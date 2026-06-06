@@ -75,6 +75,7 @@ class Product(_Entity):
     platform_code: str
     source_p_number: str
     item_name: str
+    category: str | None = None
     fabric_composition: str | None = None
     origin: str | None = None
     lead_time_days: str | None = None

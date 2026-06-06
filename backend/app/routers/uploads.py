@@ -41,6 +41,12 @@ class SupabaseUploadRepo:
         res = self.sb.table("upload_jobs").select("*").eq("id", jid).is_("deleted_at", "null").maybe_single().execute()
         return res.data if res else None
 
+    def list_jobs(self, wid, limit=20):
+        return self.sb.table("upload_jobs").select(
+            "id,status,total_rows,matched_rows,error_rows,error_detail,file_path,created_at,completed_at"
+        ).eq("wholesaler_id", wid).is_("deleted_at", "null").order(
+            "created_at", desc=True).limit(limit).execute().data or []
+
     def products_pnum_map(self, wid):
         rows = self.sb.table("products").select("id,source_p_number").eq(
             "wholesaler_id", wid).is_("deleted_at", "null").execute().data
@@ -101,6 +107,13 @@ def upload_images(req: AttachImagesRequest, user: CurrentUser = Depends(get_curr
     return _run(lambda: attach_images(
         SupabaseUploadRepo(), req.job_id, [i.model_dump() for i in req.images],
         created_by=user.id, caller_wid=user.wholesaler_id))
+
+
+@router.get("/jobs")
+def list_jobs(user: CurrentUser = Depends(get_current_user), limit: int = 20):
+    """도매 본인 최근 업로드 잡 목록(미매칭 관리 화면 기본 잡 선택용)."""
+    _guard(user)
+    return {"jobs": SupabaseUploadRepo().list_jobs(user.wholesaler_id, limit)}
 
 
 @router.get("/{job_id}/unmatched")

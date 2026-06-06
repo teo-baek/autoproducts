@@ -52,6 +52,12 @@ class SupabaseAuthRepo:
         )
 
 
+@router.get("/me", response_model=CurrentUser)
+def me(user: CurrentUser = Depends(get_current_user)):
+    """현재 로그인 사용자(역할/상태/소속/회사명). 프론트 역할 게이트·헤더 표시용."""
+    return user
+
+
 @router.post("/register", response_model=RegisterResponse)
 def register(req: RegisterRequest):
     """공개 회원가입 (FR-1.3). 가입 후 status=pending → 관리자 승인 대기.
