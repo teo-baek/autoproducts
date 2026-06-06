@@ -90,6 +90,7 @@ export const getMe = () => api<Me>("/auth/me", { auth: true });
 /* ── 관리자(admin) — 계정 승인 ─────────────────────────────────────────── */
 export type Account = {
   id: string;
+  email: string | null;
   role: string;
   status: string;
   seller_type: string | null;

@@ -108,9 +108,10 @@ export default function AdminApprovalsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-divider text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <th className="px-5 py-3">이메일</th>
                 <th className="px-5 py-3">회사명</th>
                 <th className="px-5 py-3">담당자</th>
                 <th className="px-5 py-3">역할</th>
@@ -123,19 +124,19 @@ export default function AdminApprovalsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center">
+                  <td colSpan={8} className="py-16 text-center">
                     <Spinner width={22} height={22} className="mx-auto text-muted-foreground" />
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm text-[var(--color-danger-fg)]">
+                  <td colSpan={8} className="py-12 text-center text-sm text-[var(--color-danger-fg)]">
                     {error}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">
                     해당 상태의 계정이 없습니다.
                   </td>
                 </tr>
@@ -144,7 +145,8 @@ export default function AdminApprovalsPage() {
                   const st = STATUS_BADGE[a.status] ?? { label: a.status, tone: "neutral" as const };
                   return (
                     <tr key={a.id} className="border-b border-divider/70 last:border-0 hover:bg-canvas">
-                      <td className="px-5 py-3.5 font-semibold text-foreground">{a.company_name ?? "—"}</td>
+                      <td className="px-5 py-3.5 font-medium text-foreground">{a.email ?? "—"}</td>
+                      <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{a.company_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{a.full_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{ROLE_LABEL[a.role] ?? a.role}</td>
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">

@@ -17,6 +17,27 @@ class SupabaseAdminRepo:
         return self.sb.table("profiles").select("*").eq("status", status).is_(
             "deleted_at", "null").order("created_at", desc=True).execute().data or []
 
+    def email_map(self) -> dict:
+        """auth.users 의 id→email 매핑(service key 의 admin API). profiles 엔 이메일이 없으므로 보강용."""
+        out: dict = {}
+        try:
+            page = 1
+            while page <= 20:  # 안전 상한(최대 ~2000계정)
+                res = self.sb.auth.admin.list_users(page=page, per_page=100)
+                users = res if isinstance(res, list) else (getattr(res, "users", None) or [])
+                if not users:
+                    break
+                for u in users:
+                    uid = getattr(u, "id", None)
+                    if uid:
+                        out[uid] = getattr(u, "email", None)
+                if len(users) < 100:
+                    break
+                page += 1
+        except Exception:  # noqa: BLE001 — 이메일 보강 실패해도 목록은 반환
+            pass
+        return out
+
     def get_profile(self, uid: str):
         res = self.sb.table("profiles").select("*").eq("id", uid).is_(
             "deleted_at", "null").maybe_single().execute()
@@ -38,7 +59,10 @@ class SupabaseAdminRepo:
 @router.get("/accounts")
 def list_accounts(status: str = "pending", user: CurrentUser = Depends(get_current_user)):
     _admin(user)
-    return SupabaseAdminRepo().list_by_status(status)
+    repo = SupabaseAdminRepo()
+    rows = repo.list_by_status(status)
+    emails = repo.email_map()
+    return [{**r, "email": emails.get(r["id"])} for r in rows]
 
 
 @router.post("/accounts/{uid}/approve")
