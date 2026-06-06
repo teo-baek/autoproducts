@@ -74,6 +74,23 @@ def test_parse_alias_header(tmp_path):
     assert parsed.rows[0]["wholesale_price"] == 120000
 
 
+def test_parse_blank_pnum_falls_back_to_item_name(tmp_path):
+    # 품번 비었지만 상품명 있으면 상품명을 품번 대용으로 등록(데이터 손실 방지)
+    p = _make_xlsx(tmp_path, [["", "프릴리OPS", "블랙", "F", "18000", ""]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["source_p_number"] == "프릴리OPS"
+
+
+def test_parse_blank_pnum_and_name_excluded(tmp_path):
+    # 품번·상품명 둘 다 없으면(도매가만) 식별 불가 → 제외(오류)
+    p = _make_xlsx(tmp_path, [["", "", "블랙", "F", "18000", ""]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.rows == []
+    fields = {e["field"] for e in parsed.errors}
+    assert "품번" in fields and "상품명" in fields
+
+
 def test_parse_xls_valid(tmp_path):
     # 구형 엑셀(.xls) — 숫자는 float 로 들어와도 _to_int 가 보정
     p = _make_xls(tmp_path, [["2001", "울코트", "네이비", "M", 50000, 99000]])

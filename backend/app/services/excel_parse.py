@@ -114,6 +114,13 @@ def _validate_into(cells: list, row_index: int, res: ParseResult, col: dict | No
     if all(v in (None, "") for v in rec.values()):   # 완전 빈 행은 건너뜀
         return
 
+    # 품번이 비면 상품명을 품번 대용으로 사용(사용자 결정 — 데이터 손실 방지).
+    # 품번·상품명 둘 다 없으면 식별 불가 → 아래 필수검증에서 오류로 제외("비워둠").
+    if not (rec.get("source_p_number") is not None and str(rec["source_p_number"]).strip()):
+        nm = rec.get("item_name")
+        if nm is not None and str(nm).strip():
+            rec["source_p_number"] = str(nm).strip()
+
     errs: list[dict] = []
     for key in ("source_p_number", "item_name"):       # 필수 텍스트
         if not (rec.get(key) is not None and str(rec[key]).strip()):
