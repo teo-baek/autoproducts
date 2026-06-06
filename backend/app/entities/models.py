@@ -110,6 +110,7 @@ class ProductImage(_Entity):
     product_id: str | None = None         # NULL = 미매칭
     wholesaler_id: str
     storage_path: str
+    thumbnail_path: str | None = None     # 서버 가공 웹 썸네일(thumbs/...); 미가공/실패 시 NULL
     original_filename: str | None = None
     match_status: ImageMatch = ImageMatch.unmatched
     is_representative: bool = False

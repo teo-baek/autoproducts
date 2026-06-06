@@ -8,6 +8,7 @@ from app.core.rbac import require_approved, require_role
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.schemas.upload import AttachImagesRequest, MatchRequest
+from app.services.excel_parse import ExcelFormatError
 from app.services.platform_code import next_platform_code
 from app.services.uploads import (
     UploadError, UploadForbidden, attach_images, ingest_excel, list_unmatched, resolve_match,
@@ -54,6 +55,16 @@ class SupabaseUploadRepo:
 
     def insert_images(self, rows):
         return self.sb.table("product_images").insert(rows).execute().data
+
+    # ── Storage(이미지 가공용) ── service key 라 RLS 우회; 경로는 도매 스코프로 프론트가 생성 ──
+    def download_object(self, path, bucket="product-images"):
+        return self.sb.storage.from_(bucket).download(path)   # bytes
+
+    def upload_object(self, path, data, bucket="product-images", content_type="image/jpeg"):
+        # 재가공/재업로드 멱등 위해 upsert. supabase-py file_options 값은 문자열.
+        self.sb.storage.from_(bucket).upload(
+            path, data, {"content-type": content_type, "upsert": "true"})
+        return path
 
     def list_unmatched_images(self, wid):
         return self.sb.table("product_images").select("*").eq(
@@ -102,6 +113,8 @@ async def upload_excel(file: UploadFile = File(...), user: CurrentUser = Depends
                            created_by=user.id, source_label=file.filename)
     except HTTPException:
         raise
+    except ExcelFormatError as e:  # 필수 컬럼 누락 등 파일 단위 형식 오류 — 그대로 안내
+        raise HTTPException(400, str(e))
     except Exception as e:  # 파싱/DB 오류를 친화 400 으로 변환(500 → 가짜 CORS 오류 방지)
         raise HTTPException(400, f"엑셀 처리 중 오류 — 파일 형식·내용을 확인해주세요. ({str(e)[:160]})")
     finally:

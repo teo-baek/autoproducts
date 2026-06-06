@@ -14,8 +14,13 @@ repo 프로토콜(라우터의 SupabaseUploadRepo / 테스트의 FakeUploadRepo 
   insert_images(rows) / list_unmatched_images(wholesaler_id)
   update_image(id, patch, wholesaler_id=None) -> dict|None
 """
+from concurrent.futures import ThreadPoolExecutor
+
 from app.services.excel_parse import parse_template_rows
 from app.services.image_match import match_filename_to_product
+from app.services.image_process import process_image_bytes, thumb_path
+
+_IMG_WORKERS = 8
 
 
 class UploadError(Exception):
@@ -47,11 +52,16 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
     for r in res.rows:
         key = r["source_p_number"]
         if key not in grouped:
-            grouped[key] = {"item_name": r["item_name"], "skus": []}
+            # 혼용률은 상품 단위 — 그룹 첫 행 중 값이 있는 것을 채택.
+            grouped[key] = {"item_name": r["item_name"],
+                            "fabric_composition": r.get("fabric_composition"), "skus": []}
             order.append(key)
+        elif not grouped[key].get("fabric_composition") and r.get("fabric_composition"):
+            grouped[key]["fabric_composition"] = r["fabric_composition"]
         grouped[key]["skus"].append({
             "color": r["color"], "size": r["size"],
             "wholesale_price": r["wholesale_price"], "retail_price": r["retail_price"],
+            "stock": r.get("stock", 0),
         })
 
     created, insert_errors = [], []
@@ -64,6 +74,7 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
                 "platform_code": repo.next_platform_code(),
                 "source_p_number": key,
                 "item_name": g["item_name"],
+                "fabric_composition": g.get("fabric_composition"),
             })
             repo.insert_skus([{**s, "product_id": product["id"]} for s in g["skus"]])
             created.append(product)
@@ -84,9 +95,40 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
     return {"job": job, "products": created, "errors": errors}
 
 
+def _process_one_image(repo, row: dict) -> str:
+    """원본 다운로드 → 가공 → thumbs/ 업로드 → row['thumbnail_path'] 기록. 이미지 단위 격리.
+
+    반환 상태: 'ok'(썸네일 생성) / 'none'(원본을 못 가져옴) / 'error'(다운로드는 됐으나 가공/업로드 실패).
+    실패해도 예외를 전파하지 않는다(배치 전체 보호) — thumbnail_path 는 None 으로 남고 원본 폴백.
+    """
+    src = row["storage_path"]
+    try:
+        raw = repo.download_object(src)
+    except Exception:
+        return "none"
+    if not raw:
+        return "none"
+    result = process_image_bytes(raw)
+    if result.status != "ok" or result.data is None:
+        return "error"
+    dst = thumb_path(src)
+    try:
+        repo.upload_object(dst, result.data)
+    except Exception:
+        return "error"
+    row["thumbnail_path"] = dst
+    return "ok"
+
+
 def attach_images(repo, job_id: str, images: list[dict],
-                  created_by: str | None = None, caller_wid: str | None = None) -> dict:
-    """프론트가 Storage 에 올린 이미지 매니페스트를 품번 자동매칭 후 product_images 기록."""
+                  created_by: str | None = None, caller_wid: str | None = None,
+                  process: bool = True) -> dict:
+    """프론트가 Storage 에 올린 이미지 매니페스트를 품번 자동매칭 + 서버측 썸네일 가공 후 기록.
+
+    가공은 repo 가 storage 접근 메서드(download_object/upload_object)를 가질 때만 수행한다
+    (단위 테스트의 FakeUploadRepo 처럼 없으면 자동 건너뜀 — 매칭/기록은 그대로).
+    매칭 여부와 무관하게 전 이미지를 가공(미매칭 이미지도 썸네일 → 수동매칭 UI 프리뷰 깔끔).
+    """
     job = _owned_job(repo, job_id, caller_wid)
     wholesaler_id = job["wholesaler_id"]
     pmap = repo.products_pnum_map(wholesaler_id)
@@ -98,6 +140,7 @@ def attach_images(repo, job_id: str, images: list[dict],
         rows.append({
             "wholesaler_id": wholesaler_id,
             "storage_path": img["storage_path"],
+            "thumbnail_path": None,
             "original_filename": fname,
             "product_id": pid,
             "match_status": "matched" if pid else "unmatched",
@@ -105,13 +148,23 @@ def attach_images(repo, job_id: str, images: list[dict],
         })
         (matched if pid else unmatched).append(fname)
 
+    # 서버측 썸네일 가공(원본 다운로드→리사이즈→thumbs 업로드) — 이미지 단위 병렬 + 격리.
+    processed = {"ok": 0, "none": 0, "error": 0}
+    can_process = (process and rows
+                   and hasattr(repo, "download_object") and hasattr(repo, "upload_object"))
+    if can_process:
+        with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
+            for status in ex.map(lambda r: _process_one_image(repo, r), rows):
+                processed[status] += 1
+
     inserted = repo.insert_images(rows) if rows else []
     prev_matched = job.get("matched_rows") or 0
     repo.update_upload_job(job_id, {
         "matched_rows": prev_matched + len(matched),       # 분할 업로드 누적
         "status": "completed" if not unmatched else "needs_matching",
     })
-    return {"job_id": job_id, "matched": matched, "unmatched": unmatched, "images": inserted}
+    return {"job_id": job_id, "matched": matched, "unmatched": unmatched,
+            "processed": processed, "images": inserted}
 
 
 def list_unmatched(repo, job_id: str, caller_wid: str | None = None) -> list[dict]:

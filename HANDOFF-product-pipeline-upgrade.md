@@ -1,8 +1,38 @@
 # HANDOFF — 상품등록 엑셀/이미지 파이프라인 고도화 (jinsup_dev 흡수)
 
+> ✅ **3파트 모두 구현 완료 (2026-06-06)** — 백엔드 **115 passed**. 아래 "완료 내역" 참고.
+> ⚠️ **사용자 잔여 액션**: ① 마이그레이션 `_08`(`product_images.thumbnail_path`) SQL Editor 실행 ② `product-images` 버킷(공개) 생성 ③ (이전 분) `_07` 실행.
 > 다음 세션 시작 경로: `HANDOFF-product-pipeline-upgrade.md`
-> 작성: 2026-06-06 / 브랜치: `v2-dev` / 백엔드 **93 passed** / 상품관리(상품등록·대량마법사·미매칭) 구현 완료 상태에서 이어감
+> 작성: 2026-06-06 / 브랜치: `v2-dev` / 백엔드 **93→115 passed**
 > 같이 보기: [HANDOFF-product-registration.md](HANDOFF-product-registration.md)(상품등록 구현분) · [HANDOFF.md](HANDOFF.md)(백엔드 전반) · 규칙 [CLAUDE.md](CLAUDE.md)
+
+---
+
+## ✅ 완료 내역 (2026-06-06 이 세션)
+**① 엑셀 동의어/필수컬럼/stock·혼용률** — `services/excel_parse.py`
+- `_ALIASES` 를 jinsup `SYNONYMS_POOL` 기준 병합 확장(모델명·물품명·색상명·상세사이즈·도매단가·입고가·매장판매가 등). 우선순위 = 목록 순서(⚠️ `도매가`를 `입고가`/`도매Sale` 보다 앞에 둬 실제 POS에서 올바른 열 선택).
+- 선택 컬럼 `fabric_composition`(혼용률/혼방률/소재)·`stock`(재고정상/재고/현재고/매장량/수량) 신규 매핑. `재고`는 관대 파싱(비숫자→0, 행 안 죽임). 혼용률은 자유 텍스트.
+- 필수 논리컬럼(품번·상품명·도매가) 헤더 미발견 → **`ExcelFormatError`(파일 단위)**. 위치 폴백 제거. 라우트 `upload_excel`이 → 400 친화 메시지.
+- `ingest_excel`: `stock`→SKU, `fabric_composition`→Product(그룹 첫 유효값) 인입.
+
+**② 이미지 서버측 가공** — 신규 `services/image_process.py` + `services/uploads.py`
+- `process_image_bytes()`: EXIF 정면보정(`exif_transpose`)→RGB→**웹 800px 상한**(`WEB_MAX_BOX`, 확대 안 함)→JPEG. 실패는 예외 대신 `status='error'`.
+- `attach_images()`: repo 가 `download_object`/`upload_object` 를 가질 때만(capability 감지) 가공 — 원본 다운로드→리사이즈→`thumbs/...` 업로드→`thumbnail_path` 기록. **none/ok/error 3-상태 + `ThreadPoolExecutor`(max 8) 이미지 단위 격리**. 미매칭 이미지도 가공. 응답에 `processed` 카운트 추가.
+- `SupabaseUploadRepo.download_object/upload_object`(service key, `upsert`). 엔티티 `ProductImage.thumbnail_path` 추가. 마이그레이션 `_08`.
+
+**③ 파일명→품번 매칭** — `services/image_match.py`
+- 정규화: 확장자 제거→끝 `.0` 제거→trim. 후보 `[정규화 전체, *(_-공백 토큰)]`(토큰도 `.0` 제거). 정확 일치 먼저(전체→토큰)→대소문자 무시 폴백.
+
+테스트: `test_image_process.py`(신규), `test_image_match.py`·`test_excel_parse.py`·`test_uploads_service.py`(확장).
+
+### 후속 메모(범위 밖, 필요 시)
+- 대량(수백 장) 시 동기 가공이 길면 `upload_job` 에 `processing` 상태 + 백그라운드 잡으로(현재 MVP=병렬+격리 동기).
+- 프론트가 `thumbnail_path` 를 카탈로그/미매칭 프리뷰에 사용하도록 연동(현재 백엔드만 기록).
+- 썸네일 2종(카드용 소형)·`representative_image_url` 자동 세팅은 미구현.
+
+---
+
+## 📦 (이하 원본 작업지시 — 보존)
 
 ## 🎯 목표
 v2-dev 상품등록 파이프라인의 **① 엑셀 컬럼 흡수 ② 이미지 서버측 가공 ③ 파일명 매칭**을 `jinsup_dev` 수준으로 끌어올린다.

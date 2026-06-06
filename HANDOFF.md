@@ -1,6 +1,6 @@
 # HANDOFF — ezmerce v2 백엔드 (1차)
 
-> 🔭 **다음 작업 = 상품등록 엑셀/이미지 파이프라인 고도화(jinsup_dev 흡수)** → [HANDOFF-product-pipeline-upgrade.md](HANDOFF-product-pipeline-upgrade.md) 로 시작.
+> ✅ **상품등록 엑셀/이미지 파이프라인 고도화 완료(2026-06-06, 백엔드 115 passed)** → [HANDOFF-product-pipeline-upgrade.md](HANDOFF-product-pipeline-upgrade.md). 사용자 액션: 마이그레이션 **`_08`** 실행 + `product-images` 버킷(공개) 생성.
 > ✅ 도매상 상품 등록(프론트+백엔드) 구현 완료 (2026-06-06) → [HANDOFF-product-registration.md](HANDOFF-product-registration.md). 사용자 액션 2개 남음: **마이그레이션 `_07`** + **`product-images` 버킷(공개)** 생성. (인증·디자인시스템도 완료 — [HANDOFF-frontend-design-system.md](HANDOFF-frontend-design-system.md). 이 문서는 백엔드 상태/인계)
 > 새 세션은 이 파일 경로만 주고 시작하면 됩니다: `HANDOFF.md`
 > 최종 갱신: 2026-06-04 / 브랜치: **`v2-dev`** / 단위 **65 passed** / **라이브 스모크 24 PASS·0 FAIL** / `_05` 적용됨 / 비즈니스 라우트 **16개**(+health)

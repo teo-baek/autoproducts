@@ -1,6 +1,7 @@
 import csv
 import openpyxl
-from app.services.excel_parse import parse_template_rows, TEMPLATE_COLUMNS
+import pytest
+from app.services.excel_parse import ExcelFormatError, parse_template_rows, TEMPLATE_COLUMNS
 
 def _make_xlsx(tmp_path, rows):
     wb = openpyxl.Workbook(); ws = wb.active
@@ -133,3 +134,83 @@ def test_parse_blank_trailing_row_skipped(tmp_path):
     p = _make_xlsx(tmp_path, [["1001","셔츠","화이트","F","12000","29000"], [None]*6])
     parsed = parse_template_rows(str(p))
     assert len(parsed.rows) == 1 and parsed.errors == []   # 빈 행은 오류 아님
+
+
+# ── 동의어 헤더 확장(jinsup SYNONYMS_POOL 흡수) ──────────────────────────────
+def test_parse_extended_aliases(tmp_path):
+    # 모델명→품번, 물품명→상품명, 색상명→색상, 상세사이즈→사이즈, 도매단가→도매가, 매장판매가→판매가
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["모델명", "물품명", "색상명", "상세사이즈", "도매단가", "매장판매가"])
+    ws.append(["M-9", "트렌치", "카멜", "55", "88000", "159000"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    r = parsed.rows[0]
+    assert r["source_p_number"] == "M-9"
+    assert r["item_name"] == "트렌치"
+    assert r["color"] == "카멜"
+    assert r["size"] == "55"
+    assert r["wholesale_price"] == 88000
+    assert r["retail_price"] == 159000
+
+
+def test_wholesale_priority_when_multiple_price_columns(tmp_path):
+    # 실제 POS 처럼 입고가·도매가·도매Sale 이 동시에 있으면 '도매가'(우선순위 앞) 를 택함
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "입고가", "도매가", "도매Sale", "소매가"])
+    ws.append(["1001", "코트", "블랙", "F", "10000", "18000", "15000", "39000"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["wholesale_price"] == 18000     # 입고가(10000)/도매Sale(15000) 아님
+
+
+def test_stock_column_ingested(tmp_path):
+    # 재고정상 → stock 인입(관대 파싱). 혼용률 → fabric_composition.
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "도매가", "판매가", "혼용률", "재고정상"])
+    ws.append(["1001", "니트", "그레이", "M", "12000", "29000", "울 80% 나일론 20%", "7"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    r = parsed.rows[0]
+    assert r["stock"] == 7
+    assert r["fabric_composition"] == "울 80% 나일론 20%"
+
+
+def test_stock_non_numeric_is_lenient(tmp_path):
+    # 재고는 선택 메타 — 비숫자여도 행을 막지 않고 0 으로(가격과 다른 정책)
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "도매가", "재고"])
+    ws.append(["1001", "셔츠", "화이트", "F", "12000", "품절"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["stock"] == 0
+
+
+def test_missing_required_column_raises_file_error(tmp_path):
+    # 도매가 컬럼이 헤더에 아예 없음 → 파일 단위 오류(행별로 흐려지지 않음)
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈"])          # 도매가 없음
+    ws.append(["1001", "셔츠", "화이트", "F"])
+    wb.save(p)
+    with pytest.raises(ExcelFormatError) as ei:
+        parse_template_rows(str(p))
+    assert "도매가" in str(ei.value)
+
+
+def test_missing_all_required_columns_raises_file_error(tmp_path):
+    # 표준과 전혀 다른 헤더(인식 불가) → 파일 단위 오류(위치 폴백 안 함)
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["메모", "비고", "기타"])
+    ws.append(["a", "b", "c"])
+    wb.save(p)
+    with pytest.raises(ExcelFormatError):
+        parse_template_rows(str(p))

@@ -190,6 +190,85 @@ def test_ingest_excel_duplicate_pnum_becomes_error_not_crash():
     assert out["job"]["status"] == "needs_matching"       # 일부라도 생성됨
 
 
+class FakeStorageRepo(FakeUploadRepo):
+    """원본을 다운로드/가공/업로드하는 가공 경로 검증용 — 인메모리 Storage."""
+    def __init__(self):
+        super().__init__()
+        self.store = {}                       # path -> bytes
+
+    def put(self, path, data):
+        self.store[path] = data
+
+    def download_object(self, path, bucket="product-images"):
+        return self.store[path]               # 없으면 KeyError → 서비스가 'none' 처리
+
+    def upload_object(self, path, data, bucket="product-images", content_type="image/jpeg"):
+        self.store[path] = data
+        return path
+
+
+def _jpeg_bytes(w=1200, h=900):
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (w, h), (10, 120, 200))
+    buf = io.BytesIO(); img.save(buf, format="JPEG"); return buf.getvalue()
+
+
+def test_attach_images_generates_thumbnail_when_storage_available():
+    repo = FakeStorageRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    repo.put("w1/1001.jpg", _jpeg_bytes())     # 프론트가 올려둔 원본
+    out = attach_images(repo, "job-1",
+                        [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}],
+                        caller_wid="w1")
+    assert out["processed"] == {"ok": 1, "none": 0, "error": 0}
+    img = repo.images[0]
+    assert img["thumbnail_path"] == "thumbs/w1/1001.jpg"     # 파생 썸네일 경로 기록
+    assert "thumbs/w1/1001.jpg" in repo.store                # 실제 업로드됨
+    assert repo.store["thumbs/w1/1001.jpg"][:2] == b"\xff\xd8"  # JPEG 산출물
+
+
+def test_attach_images_missing_original_marked_none_not_crash():
+    repo = FakeStorageRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    # 원본을 store 에 넣지 않음 → download 실패 → 'none'(배치 안 죽음)
+    out = attach_images(repo, "job-1",
+                        [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}],
+                        caller_wid="w1")
+    assert out["processed"]["none"] == 1
+    assert repo.images[0]["thumbnail_path"] is None          # 가공 실패 → 원본 폴백
+
+
+def test_attach_images_corrupt_original_marked_error():
+    repo = FakeStorageRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    repo.put("w1/1001.jpg", b"\x00 not an image \xff")        # 다운로드는 되나 가공 실패
+    out = attach_images(repo, "job-1",
+                        [{"original_filename": "1001.jpg", "storage_path": "w1/1001.jpg"}],
+                        caller_wid="w1")
+    assert out["processed"]["error"] == 1
+    assert repo.images[0]["thumbnail_path"] is None
+
+
+def test_attach_images_processes_unmatched_images_too():
+    # 미매칭 이미지도 썸네일 생성(수동매칭 UI 프리뷰용)
+    repo = FakeStorageRepo()
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.put("w1/9999.jpg", _jpeg_bytes())
+    out = attach_images(repo, "job-1",
+                        [{"original_filename": "9999.jpg", "storage_path": "w1/9999.jpg"}],
+                        caller_wid="w1")
+    assert out["unmatched"] == ["9999.jpg"]
+    assert out["processed"]["ok"] == 1
+    assert repo.images[0]["thumbnail_path"] == "thumbs/w1/9999.jpg"
+
+
 def test_list_unmatched_returns_only_unmatched():
     repo = FakeUploadRepo()
     repo.create_upload_job({"wholesaler_id": "w1"})

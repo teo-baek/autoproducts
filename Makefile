@@ -48,4 +48,4 @@ ports: ## 포트 사용 현황 확인
 
 migrate: ## DB 마이그레이션 안내 (DDL 은 Supabase SQL Editor 에서 직접)
 	@echo "DDL 은 Supabase SQL Editor 에서 실행하세요 (순서: $(API_DIR)/migrations/README.md)"
-	@echo "최신: $(API_DIR)/migrations/2026-06-06_v2_core_07_product_category.sql"
+	@echo "최신: $(API_DIR)/migrations/2026-06-06_v2_core_08_image_thumbnail.sql"
