@@ -1,9 +1,25 @@
 # HANDOFF — 도매상 상품 등록 (apps/web)
 
-> 다음 세션은 이 파일 경로로 시작: `HANDOFF-product-registration.md`
 > 작성: 2026-06-06 / 브랜치: `v2-dev` / 백엔드 상태=[HANDOFF.md](HANDOFF.md) · 디자인=[apps/web/design/DESIGN-SYSTEM.md](apps/web/design/DESIGN-SYSTEM.md) · 할 일=[TODO.md](TODO.md)
->
-> 🔜 **다음 작업 = 도매상(wholesaler) 입장의 "상품 등록" 화면 구현.** 사용자가 **상품등록 관련 PDF 시안**을 다음 세션에 줄 예정 → 그 스펙 + 아래 백엔드/디자인 기반으로 구현.
+
+## ✅ 구현 완료 (2026-06-06, `도매상_상품등록.pdf` 시안 기준)
+**도매 상품관리 화면 전체 + 백엔드 보강 완료.** 백엔드 **78 tests pass**, 프론트 **next build·lint 통과**.
+- **셸-B**(다크 사이드바 백오피스) — `components/Shell.tsx` + `app/(dash)/layout.tsx`(AuthGuard + 도매 역할 게이트 `WholesalerGate`).
+- **상품 데이터 관리 목록** — `app/(dash)/products/page.tsx`: 분류 탭(전체/의류/잡화)·페이지네이션·엑셀 다운로드·상품 업로드 팝오버(단일/대량/미매칭)·관리모드(수정·보관/복구·삭제).
+- **단일 상품 등록/수정 모달** — `components/SingleProductModal.tsx`: 색상×사이즈 → SKU 매트릭스, 이미지 직접 업로드.
+- **대량 등록 마법사(4스텝)** — `app/(dash)/products/bulk/page.tsx`: 파일→이미지→검증→완료 + 이미지 실패 상태. `components/Stepper.tsx`.
+- **미매칭 매칭** — `app/(dash)/products/unmatched/page.tsx`: 드래그&드롭(이미지↔품번), 자동매칭 점수, 저장.
+- **대시보드/고객/주문/카탈로그** = `ComingSoon`("준비 중") 플레이스홀더.
+- **백엔드 보강**: `GET /products`(목록·관리뷰 가격)·`GET /products/{id}`·`PUT /products/{id}/skus`(SKU 교체)·`GET /products/export.xlsx`·`GET /uploads/jobs`·`GET /auth/me` + `products.category` 컬럼/스키마.
+
+### ⚠️ 사용자가 직접 해야 동작 (2가지)
+1. **마이그레이션 `_07` 실행** — `backend/migrations/2026-06-06_v2_core_07_product_category.sql` (Supabase SQL Editor). 안 하면 카테고리 탭/단일등록 카테고리 선택만 영향(나머지는 정상).
+2. **`product-images` Storage 버킷 생성(공개 권장)** — 대시보드 Storage → New bucket `product-images`, Public ✓. 안 하면 이미지 업로드만 실패(상품 데이터 등록은 정상).
+- 도매 계정으로 로그인해야 화면 접근 가능(`require_role("wholesaler")` + 승인). 미승인/비도매는 게이트 안내.
+
+---
+
+> (이하 원본 인계 내용 — 구현 시 근거로 사용한 백엔드 계약/디자인 매핑/규칙)
 
 ---
 
