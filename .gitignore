@@ -27,3 +27,9 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# Editor swap/temp files (vim 등)
+*.swp
+*.swo
+*~
+.*.swp
