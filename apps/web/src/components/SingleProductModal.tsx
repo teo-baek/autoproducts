@@ -4,7 +4,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   buildSkuMatrix,
-  CATEGORY_OPTIONS,
   createProduct,
   productThumb,
   replaceSkus,
@@ -17,7 +16,6 @@ import {
   Button,
   Dialog,
   NumberField,
-  Select,
   TextField,
 } from "@/components/ui";
 import { ImageIcon, Plus, Pencil } from "@/components/icons";
@@ -37,7 +35,6 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
   const isEdit = !!editing;
   const [itemName, setItemName] = useState("");
   const [sku, setSku] = useState("");
-  const [category, setCategory] = useState("");
   const [wholesale, setWholesale] = useState("");
   const [retail, setRetail] = useState("");
   const [colors, setColors] = useState("");
@@ -58,7 +55,6 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
     if (editing) {
       setItemName(editing.item_name);
       setSku(editing.source_p_number);
-      setCategory(editing.category ?? "");
       const s0 = editing.skus[0];
       const minW = Math.min(...editing.skus.map((s) => s.wholesale_price));
       setWholesale(String(isFinite(minW) ? minW : s0?.wholesale_price ?? ""));
@@ -69,7 +65,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
       setStock(s0?.stock != null ? String(s0.stock) : "");
       setPreview(productThumb(editing));
     } else {
-      setItemName(""); setSku(""); setCategory(""); setWholesale(""); setRetail("");
+      setItemName(""); setSku(""); setWholesale(""); setRetail("");
       setColors(""); setSizes(""); setFabric(""); setStock(""); setPreview(null);
     }
   }, [open, editing]);
@@ -96,7 +92,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
       if (isEdit && editing) {
         await updateProduct(editing.id, {
           item_name: itemName.trim(),
-          category: category || null,
+          category: null,
           fabric_composition: fabric.trim() || null,
         });
         await replaceSkus(editing.id, matrix);
@@ -106,7 +102,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
         const created = await createProduct({
           source_p_number: sku.trim(),
           item_name: itemName.trim(),
-          category: category || null,
+          category: null,
           fabric_composition: fabric.trim() || null,
           skus: matrix,
         });
@@ -167,22 +163,13 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField
-                label="품번 (SKU) *"
-                placeholder="예: F-SLK-001"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                disabled={isEdit}
-              />
-              <Select
-                label="카테고리"
-                placeholder="선택해주세요"
-                options={CATEGORY_OPTIONS}
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              />
-            </div>
+            <TextField
+              label="품번 (SKU) *"
+              placeholder="예: F-SLK-001"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              disabled={isEdit}
+            />{/* 카테고리 셀렉트 임시 숨김 — 분류 기준 정해지면 복구 */}
           </section>
 
           <section className="space-y-4">

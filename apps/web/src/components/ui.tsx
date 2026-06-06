@@ -344,15 +344,15 @@ export function Dialog({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4">
+    <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-ink-strong/45 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative my-auto w-full ${DIALOG_SIZES[size]} rounded-[var(--radius-xl)] bg-surface shadow-[var(--shadow-lg)]`}
+        className={`relative flex max-h-[90vh] w-full flex-col ${DIALOG_SIZES[size]} overflow-hidden rounded-[var(--radius-xl)] bg-surface shadow-[var(--shadow-lg)]`}
       >
         {(title || icon) && (
-          <div className="flex items-center gap-3 border-b border-divider px-7 py-5">
+          <div className="flex shrink-0 items-center gap-3 border-b border-divider px-7 py-5">
             {icon && (
               <span className="flex size-9 items-center justify-center rounded-full border border-border text-foreground">
                 {icon}
@@ -369,9 +369,10 @@ export function Dialog({
             </button>
           </div>
         )}
-        <div className="px-7 py-6">{children}</div>
+        {/* 본문만 스크롤 — 헤더/푸터는 고정(min-h-0 이 있어야 flex 자식이 스크롤됨) */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-divider px-7 py-4">
+          <div className="flex shrink-0 items-center justify-end gap-3 border-t border-divider bg-surface px-7 py-4">
             {footer}
           </div>
         )}

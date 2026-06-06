@@ -38,11 +38,6 @@ import {
 } from "@/components/icons";
 
 const PAGE_SIZE = 8;
-const TABS = [
-  { value: "", label: "전체" },
-  { value: "의류", label: "의류" },
-  { value: "잡화", label: "잡화" },
-];
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -50,7 +45,7 @@ export default function ProductsPage() {
   const [items, setItems] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [tab, setTab] = useState("");
+  const tab = ""; // 카테고리 필터 임시 숨김(분류 기준 미정) — 항상 전체
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
@@ -204,25 +199,7 @@ export default function ProductsPage() {
               {total}
             </span>
           </div>
-          <div className="ml-1 flex gap-1">
-            {TABS.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => {
-                  setTab(t.value);
-                  setPage(0);
-                }}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                  tab === t.value
-                    ? "bg-ink text-white"
-                    : "text-muted-foreground hover:bg-subtle hover:text-foreground"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* 카테고리 필터 탭 임시 숨김 — 분류 기준 정해지면 복구 */}
           <div className="ml-auto flex items-center gap-2">
             {manage && (
               <Badge tone="info">

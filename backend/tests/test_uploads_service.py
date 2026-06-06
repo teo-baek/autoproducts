@@ -329,12 +329,23 @@ def test_stage_zip_uploads_and_returns_manifest():
     assert out["processed"]["ok"] == 2
     names = {m["original_filename"] for m in out["manifest"]}
     assert names == {"1001.jpg", "9999.png"}
-    assert "w1/staging/1001.jpg" in repo.store          # 원본 staging 업로드
-    assert "thumbs/w1/staging/1001.jpg" in repo.store   # 썸네일 생성
     m = next(m for m in out["manifest"] if m["original_filename"] == "1001.jpg")
-    assert m["storage_path"] == "w1/staging/1001.jpg"
-    assert m["thumbnail_path"] == "thumbs/w1/staging/1001.jpg"
+    # 저장 키는 ASCII 안전 해시(원본명 그대로 아님) — staging 경로 + .jpg
+    assert m["storage_path"].startswith("w1/staging/") and m["storage_path"].endswith(".jpg")
+    assert m["storage_path"] in repo.store                          # 원본 staging 업로드
+    assert m["thumbnail_path"] == "thumbs/" + m["storage_path"]     # 썸네일 생성
+    assert m["thumbnail_path"] in repo.store
     assert repo.images == [] and repo.products == []     # DB 미기록(staging 단계)
+
+
+def test_stage_zip_korean_filename_safe_key():
+    # 한글 파일명도 InvalidKey 안 나게 ASCII 안전 키로 저장 + 원본명은 보존
+    repo = FakeStorageRepo()
+    out = stage_zip_to_manifest(repo, "w1", _zip_bytes([("수플레니트198.jpg", _jpeg_bytes())]))
+    m = out["manifest"][0]
+    assert m["original_filename"] == "수플레니트198.jpg"            # 원본 한글명 보존(매칭용)
+    assert m["storage_path"].isascii()                              # 저장 키는 ASCII
+    assert m["storage_path"].startswith("w1/staging/")
 
 
 def test_stage_zip_no_images_raises():
@@ -367,7 +378,7 @@ def test_commit_flow_stage_then_attach_with_thumbnail():
     assert out["matched"] == ["1001.jpg"]
     img = repo.images[0]
     assert img["product_id"] == "p1"
-    assert img["thumbnail_path"] == "thumbs/w1/staging/1001.jpg"   # staged 썸네일 재사용
+    assert img["thumbnail_path"] == staged[0]["thumbnail_path"]    # staged 썸네일 재사용
     assert out["processed"] == {"ok": 0, "none": 0, "error": 0}    # 재가공 안 함(이미 썸네일 있음)
     assert repo.store == before                                    # Storage 추가 변경 없음
 

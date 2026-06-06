@@ -125,7 +125,8 @@ export default function BulkPage() {
       const f = imgs[i];
       const idx = start + i;
       try {
-        const { storage_path } = await uploadProductImage(f, wid, `bulk/${stamp}-${i}-${f.name}`);
+        // 저장 키는 ASCII(인덱스)만 — 한글 파일명은 매니페스트 original_filename 으로 따로 전달(매칭용)
+        const { storage_path } = await uploadProductImage(f, wid, `bulk/${stamp}-${i}`);
         setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "done", storage_path } : it)));
       } catch (e) {
         setImgFailed(true);

@@ -274,7 +274,8 @@ export async function uploadProductImage(
   wholesalerId: string,
   key: string
 ): Promise<{ storage_path: string; publicUrl: string }> {
-  const ext = file.name.split(".").pop() ?? "jpg";
+  // ⚠️ Supabase Storage 키는 ASCII 만 허용(한글/특수문자 → InvalidKey). 확장자도 ASCII 로 정리.
+  const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "jpg";
   const storage_path = `${wholesalerId}/${key}.${ext}`;
   const { error } = await supabase.storage
     .from(PRODUCT_BUCKET)

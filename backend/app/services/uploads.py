@@ -14,10 +14,27 @@ repo 프로토콜(라우터의 SupabaseUploadRepo / 테스트의 FakeUploadRepo 
   insert_images(rows) / list_unmatched_images(wholesaler_id)
   update_image(id, patch, wholesaler_id=None) -> dict|None
 """
+import hashlib
 import io
+import logging
 import posixpath
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+
+log = logging.getLogger("ezmerce.uploads")
+
+
+def _safe_object_name(name: str) -> str:
+    """Supabase Storage 객체 키는 ASCII 제한 — 한글/공백/일부 특수문자는 InvalidKey(400) 거부.
+
+    그래서 저장 키는 원본명의 해시(ASCII) + 확장자로 만든다(결정적이라 재업로드 시 같은 키 → upsert).
+    진짜 파일명(한글 등)은 호출부가 original_filename 으로 따로 보관(품번 매칭·표시는 그걸로).
+    """
+    base = posixpath.basename(str(name).replace("\\", "/"))
+    ext = base.rsplit(".", 1)[-1].lower() if "." in base else "jpg"
+    ext = "".join(c for c in ext if c.isalnum()) or "jpg"
+    digest = hashlib.md5(name.encode("utf-8")).hexdigest()[:16]
+    return f"{digest}.{ext}"
 
 from app.services.excel_parse import parse_template_rows
 from app.services.image_match import match_filename_to_product
@@ -297,10 +314,12 @@ def stage_zip_to_manifest(repo, wholesaler_id: str, zip_bytes: bytes) -> dict:
 
     def _handle(payload: tuple[str, bytes, str]) -> dict:
         base, raw, ctype = payload
-        storage_path = f"{wholesaler_id}/staging/{base}"
+        # 저장 키는 ASCII 안전값(해시) — 한글 파일명을 키로 쓰면 Supabase InvalidKey.
+        storage_path = f"{wholesaler_id}/staging/{_safe_object_name(base)}"
         try:
             repo.upload_object(storage_path, raw, content_type=ctype)
         except Exception:
+            log.exception("staging 원본 업로드 실패 path=%s", storage_path)  # 실제 Storage 오류 노출
             return {"status": "none", "item": None}
         dst, status = _thumbnail_from_bytes(repo, storage_path, raw)
         return {"status": status,

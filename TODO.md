@@ -2,7 +2,7 @@
 
 > 앞으로의 작업 정리. 상태/인수인계는 [HANDOFF.md](HANDOFF.md), 설계/변경이력은 `docs/features/2026-06-03-ezmerce-v2-backend/`.
 > 기준: **개발정의서.pptx** — p.1 타임라인(PoC/MVP), p.2 Phase 1(코어 엔진), p.3 Phase 2(주문/배송).
-> 최종 갱신: 2026-06-04
+> 최종 갱신: 2026-06-06
 
 ## 단계 정의 (개발정의서 p.1)
 | 단계 | 데드라인 | 범위 |
@@ -46,6 +46,12 @@
 ---
 
 ## 3. 기술부채 / 하드닝  🟢 (라이브 동작엔 지장 없음, 운영 전 정리 권장)
+- [ ] **클라이언트 리사이즈 + 직통 업로드 (이미지)** — 기획 결정(2026-06-06). 고화질 불필요 → **업로드 시 브라우저에서 이미지를 가볍게 리사이즈해 Storage로 직접** 올린다(서버는 큰 바이트를 안 만짐). 그동안 겪은 저장용량·메모리·요청크기 문제를 뿌리부터 해소.
+  - **스펙(확정)**: **WebP · 긴 변 1280px** · 품질 ~0.8 · **EXIF 회전 보정**(`createImageBitmap(blob, {imageOrientation:'from-image'})` 또는 canvas) · 장당 ~100KB 목표.
+  - **범위**: 개별 이미지 + **폴더 선택(`webkitdirectory`)** + **ZIP(브라우저 JSZip 로 해제)** 모두 **클라에서 리사이즈 후 직통 업로드**. 수백 장은 **배치 처리**(브라우저 멈춤/메모리 방지). 큰 묶음은 **폴더 선택이 zip보다 유리**(zip 은 통째로 메모리에 풀어야 함).
+  - **효과**: Supabase 무료 1GB 가 ~20–30배 더 감 / Cloud Run 메모리·요청 32MB·ZIP 100MB 한계 **사실상 해소** / egress↓ / 업로드 속도↑.
+  - **백엔드 영향(단순화)**: `POST /uploads/zip/stage`·서버 썸네일(`services/image_process.py`)·`product_images.thumbnail_path`(`_08`) **제거/축소 가능**. `POST /uploads/commit`(엑셀+매니페스트)·`attach_images`(품번 매칭/기록)는 **유지**. 저장 키는 ASCII(이미 적용), 원본 한글 파일명은 `original_filename` 으로 매칭.
+  - **주의**: 서버 권위 이미지 가공이 사라지므로 클라 산출물을 신뢰(B2B 카탈로그라 무방). 파일명→품번 매칭 로직은 그대로(매니페스트 `original_filename`).
 - [ ] **uploads 트랜잭션** (리뷰 #3) — 엑셀 대량 등록 부분 실패 시 orphan 방지. job 을 먼저 `parsing` 으로 생성 → 상품 생성 → 완료 시 상태 patch (또는 서버사이드 RPC 트랜잭션).
 - [ ] **export 대표가격 폴백** (리뷰 #6) — `_export_row` 가 노출 모드를 명시적으로 받도록 리팩터(현재 첫 SKU 폴백 추론).
 - [ ] **error_detail JSONB 직렬화** (리뷰 #8) — 엑셀에 날짜/Decimal 셀 섞이면 `raw` 직렬화 실패 가능 → `str()` 정규화.
