@@ -78,7 +78,7 @@ def test_ingest_excel_records_parse_errors(tmp_path):
     p = tmp_path / "in.xlsx"
     _make_xlsx(p, [
         ("1001", "정상", "화이트", "F", 12000, 29000),
-        ("", "품번없음", "블랙", "F", 12000, 29000),       # 필수값 누락 → error
+        ("1002", "", "블랙", "F", 12000, 29000),            # 상품명 누락 → error
         ("1003", "가격이상", "레드", "F", "NOTNUM", 29000),  # 도매가 정수변환 실패 → error
     ])
     repo = FakeUploadRepo()
@@ -90,7 +90,8 @@ def test_ingest_excel_records_parse_errors(tmp_path):
 
 def test_ingest_excel_no_valid_rows_marks_failed(tmp_path):
     p = tmp_path / "in.xlsx"
-    _make_xlsx(p, [("", "x", "화이트", "F", 12000, 29000)])
+    # 품번·상품명 둘 다 없으면 식별 불가 → 유효행 0 → failed
+    _make_xlsx(p, [("", "", "화이트", "F", 12000, 29000)])
     out = ingest_excel(FakeUploadRepo(), "w1", str(p))
     assert out["products"] == []
     assert out["job"]["status"] == "failed"
