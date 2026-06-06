@@ -17,11 +17,13 @@
 - **데이터 검증 필드(FIELD) 단위 보고** — `excel_parse.py` 가 행이 아니라 **(행·필드·사유)** 로 검증(도매가 "숫자 형식이 아닙니다" / 상품명·품번 "필수 값이 누락되었습니다"). 마법사 3단계 표에 **필드 컬럼** 추가(시안과 일치).
 - **이미지 업로드 — 지원 안되는 형식 건수** 노출(jpg/png 외 제외 시 경고 배지).
 
-### 🛠 미니 어드민 가입 승인 (2026-06-06 3차)
-- **`고객 관리`(`/customers`)가 역할 인식** — 관리자 로그인 시 **가입 승인 화면**(대기/승인/거절 탭 + 회사명·담당자·역할·유형·신청일 + 승인/거절), 도매 로그인 시 "준비 중".
-- **도매 승인 시 도매업체 자동 생성·연결** — `POST /admin/accounts/{uid}/approve` 가 role=wholesaler·`wholesaler_id` 미설정이면 `wholesalers` 행을 회사명으로 생성해 연결(`approve_account` 서비스). → **승인만 하면 바로 상품등록 가능**(예전 'no wholesaler' 갭 해소).
-- 로그인/루트 진입 **역할별 리다이렉트**: 관리자 → `/customers`, 그 외 → `/products`.
-- **관리자 계정 만들기**(자가가입 불가): 아무 계정 가입 후 SQL — `update profiles set role='admin', status='approved' where id=(select id from auth.users where email='관리자@example.com');`
+### 🛠 관리자 콘솔(별도 영역) — 가입 승인 (2026-06-06 3차)
+**⚠️ 페르소나 분리**: 도매 작업공간(`(dash)` 셸-B, 대시보드/상품/고객/주문/카탈로그)은 **도매 전용**. 플랫폼 관리자(LALAS)는 **완전히 분리된 `/admin` 콘솔**을 쓴다. (고객 관리는 도매상의 고객 관리 = Phase 2 플레이스홀더 그대로)
+- **`/admin` 관리자 콘솔** — `app/admin/layout.tsx`(AuthGuard + `AdminGate`(admin 전용) + `AdminShell`(별도 다크 셸, "관리자 콘솔" 라벨)). 페이지 `app/admin/page.tsx` = **가입 승인**(대기/승인/거절 탭 + 회사명·담당자·역할·유형·신청일, 승인/거절/**재승인** 버튼).
+- **게이트 분리**: `(dash)` = `WholesalerGate`(도매 승인 전용, 관리자가 오면 `/admin`으로 리다이렉트). `/admin` = `AdminGate`(관리자 전용, 도매가 오면 `/products`로).
+- **도매 승인 시 도매업체 자동 생성·연결** — `approve_account` 가 role=wholesaler·`wholesaler_id` 미설정이면 `wholesalers` 행을 회사명으로 생성해 연결 → **승인만 하면 바로 상품등록 가능**('no wholesaler' 갭 해소). 거절=`status='rejected'`(삭제 아님), 재승인 가능.
+- 로그인/루트 **역할별 리다이렉트**: 관리자 → `/admin`, 그 외 → `/products`.
+- **관리자 계정 만들기**(자가가입 불가): 앱에서 아무 유형 가입 후 SQL — `update profiles set role='admin', status='approved' where id=(select id from auth.users where email='관리자@example.com');` → `/login` 하면 `/admin` 진입.
 
 ### ⏸ 의도적 보류 (1차 범위 외 — 기획서엔 있으나 미구현)
 - **구글 드라이브 연결**(시안 9p, 이미지 소스 옵션) — OAuth/Drive API 대형 연동 → **Phase 2**. 현재는 이미지 직접 업로드로 대체.

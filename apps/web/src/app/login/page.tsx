@@ -37,10 +37,10 @@ export default function LoginPage() {
       }
       return;
     }
-    // 역할별 진입점: 관리자 → 고객 관리(승인), 그 외 → 상품 관리
+    // 역할별 진입점: 관리자 → 관리자 콘솔, 그 외 → 도매 상품 관리
     try {
       const me = await getMe();
-      router.push(me.role === "admin" ? "/customers" : "/products");
+      router.push(me.role === "admin" ? "/admin" : "/products");
     } catch {
       router.push("/products");
     }

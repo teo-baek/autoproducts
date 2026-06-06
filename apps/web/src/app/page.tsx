@@ -17,7 +17,7 @@ export default function Home() {
       }
       try {
         const me = await getMe();
-        router.replace(me.role === "admin" ? "/customers" : "/products");
+        router.replace(me.role === "admin" ? "/admin" : "/products");
       } catch {
         router.replace("/products");
       }
