@@ -38,6 +38,42 @@ def test_parse_csv_cp949_korean(tmp_path):
     parsed = parse_template_rows(str(p))
     assert parsed.rows[0]["item_name"] == "한글상품"
 
+def test_parse_currency_and_won(tmp_path):
+    # 도매가/판매가에 ₩·원·콤마가 섞여도 숫자로 해석 ('분명 맞는데' 케이스)
+    p = _make_xlsx(tmp_path, [["F-1", "실크블라우스", "블랙", "M", "₩280,000원", "350,000 원"]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["wholesale_price"] == 280000
+    assert parsed.rows[0]["retail_price"] == 350000
+
+
+def test_parse_header_order_independent(tmp_path):
+    # 열 순서가 다르고 추가 열(카테고리)이 있어도 헤더 이름으로 매칭
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["상품명", "품번", "카테고리", "도매가", "판매가", "색상", "사이즈"])
+    ws.append(["실크블라우스", "F-SLK-001", "의류", "280000", "350000", "아이보리", "S"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    r = parsed.rows[0]
+    assert r["source_p_number"] == "F-SLK-001"
+    assert r["wholesale_price"] == 280000
+    assert r["color"] == "아이보리"
+
+
+def test_parse_alias_header(tmp_path):
+    # 별칭 헤더(공급가/소비자가/상품코드)도 인식
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["상품코드", "상품명", "색상", "사이즈", "공급가", "소비자가"])
+    ws.append(["A-1", "코트", "네이비", "L", "120000", "200000"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["wholesale_price"] == 120000
+
+
 def test_parse_xls_valid(tmp_path):
     # 구형 엑셀(.xls) — 숫자는 float 로 들어와도 _to_int 가 보정
     p = _make_xls(tmp_path, [["2001", "울코트", "네이비", "M", 50000, 99000]])
