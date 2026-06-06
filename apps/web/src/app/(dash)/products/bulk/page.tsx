@@ -4,33 +4,43 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  attachImages,
+  commitUpload,
   getMe,
-  uploadExcel,
+  stageZip,
   uploadProductImage,
-  type IngestResult,
+  validateExcel,
+  type CommitResult,
+  type ExcelPreview,
+  type ImageManifestItem,
 } from "@/lib/products";
 import { Stepper } from "@/components/Stepper";
 import { Badge, Button, Card } from "@/components/ui";
 import {
   AlertTriangle,
+  Archive,
   Check,
   Cloud,
+  ImageIcon,
   Info,
   RefreshCw,
-  Table as TableIcon,
   UploadCloud,
   X as XIcon,
 } from "@/components/icons";
 
 const STEPS = ["파일 업로드", "이미지 업로드", "데이터 검증", "등록 완료"];
+const MAX_ZIP_MB = 100; // 서버 uploads.py _ZIP_MAX_BYTES 와 일치(운영 512Mi 메모리 보호)
+const MAX_ZIP_BYTES = MAX_ZIP_MB * 1024 * 1024;
 
 type ImgItem = {
   file: File;
   name: string;
   size: number;
+  kind: "image" | "zip";
   status: "uploading" | "done" | "error";
-  storage_path?: string;
+  storage_path?: string; // 개별 이미지(스토리지 직접 업로드 경로)
+  loaded?: number; // zip 진행률(바이트)
+  total?: number;
+  manifest?: ImageManifestItem[]; // zip staging 산출 매니페스트(커밋 때 합쳐 매칭)
 };
 
 export default function BulkPage() {
@@ -38,105 +48,157 @@ export default function BulkPage() {
   const [wid, setWid] = useState("");
   const [step, setStep] = useState(0);
 
-  // step 0
+  // step 0 — 엑셀 검증(드라이런). 실제 저장은 4단계 commit 에서.
   const [excel, setExcel] = useState<File | null>(null);
-  const [ingesting, setIngesting] = useState(false);
-  const [ingest, setIngest] = useState<IngestResult | null>(null);
-  const [ingestErr, setIngestErr] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [preview, setPreview] = useState<ExcelPreview | null>(null);
+  const [validateErr, setValidateErr] = useState<string | null>(null);
 
-  // step 1
+  // step 1 — 이미지 Storage 업로드 / ZIP staging (등록 X)
   const [images, setImages] = useState<ImgItem[]>([]);
-  const [skipped, setSkipped] = useState(0); // 지원 안되는 형식(jpg/png 외) 제외 건수
-  const [attaching, setAttaching] = useState(false);
-  const [attachResult, setAttachResult] = useState<{ matched: string[]; unmatched: string[] } | null>(null);
+  const [skipped, setSkipped] = useState(0); // 지원 안되는 형식(jpg/png/zip 외) 제외 건수
   const [imgFailed, setImgFailed] = useState(false);
+  const [imgErrMsg, setImgErrMsg] = useState<string | null>(null); // 업로드 실패 친화 메시지
+  const [bigZipMsg, setBigZipMsg] = useState<string | null>(null); // 용량 초과 ZIP 안내(비차단)
+
+  // step 2 → 3 — commit(상품 생성 + 이미지 매칭)
+  const [committing, setCommitting] = useState(false);
+  const [commitErr, setCommitErr] = useState<string | null>(null);
+  const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
 
   useEffect(() => {
     getMe().then((me) => setWid(me.wholesaler_id ?? "")).catch(() => {});
   }, []);
 
   const errorStep =
-    step === 2 && ingest && ingest.errors.length > 0 ? 2 : imgFailed && step === 1 ? 1 : undefined;
+    step === 2 && preview && preview.errors.length > 0 ? 2 : imgFailed && step === 1 ? 1 : undefined;
 
-  /* ── step 0 → 1: 엑셀 인제스트 ── */
-  async function goIngest() {
+  /* ── step 0 → 1: 엑셀 검증(드라이런 — 저장 안 함) ── */
+  async function goValidate() {
     if (!excel) return;
-    setIngesting(true);
-    setIngestErr(null);
+    setValidating(true);
+    setValidateErr(null);
     try {
-      const res = await uploadExcel(excel);
-      setIngest(res);
+      const res = await validateExcel(excel);
+      setPreview(res);
       setStep(1);
     } catch (e) {
-      setIngestErr(e instanceof Error ? e.message : "파일 처리에 실패했습니다.");
+      setValidateErr(e instanceof Error ? e.message : "파일 검증에 실패했습니다.");
     } finally {
-      setIngesting(false);
+      setValidating(false);
     }
   }
 
-  /* ── step 1: 이미지 업로드(스토리지 직접) ── */
+  /* ── step 1: 이미지 Storage 업로드 / ZIP staging (등록은 4단계 commit 에서) ── */
   async function addImages(files: FileList | null) {
     if (!files || !wid) return;
     setImgFailed(false);
+    setImgErrMsg(null);
+    setBigZipMsg(null);
     const all = Array.from(files);
-    const list = all.filter((f) => /\.(jpe?g|png)$/i.test(f.name));
-    if (all.length - list.length > 0) setSkipped((s) => s + (all.length - list.length));
+    const imgs = all.filter((f) => /\.(jpe?g|png)$/i.test(f.name));
+    const allZips = all.filter((f) => /\.zip$/i.test(f.name));
+    const zips = allZips.filter((f) => f.size <= MAX_ZIP_BYTES);
+    const bigZips = allZips.filter((f) => f.size > MAX_ZIP_BYTES);
+    const skip = all.length - imgs.length - allZips.length;
+    if (skip > 0) setSkipped((s) => s + skip);
+    if (bigZips.length) {
+      // 차단형 에러 화면 대신 비차단 안내 — 나머지는 정상 진행
+      setBigZipMsg(
+        `${bigZips.map((f) => f.name).join(", ")} — ZIP은 최대 ${MAX_ZIP_MB}MB까지 올릴 수 있어요. 사진을 나눠서 올려주세요.`
+      );
+    }
+
+    const stamp = Date.now();
     const start = images.length;
     setImages((prev) => [
       ...prev,
-      ...list.map((f) => ({ file: f, name: f.name, size: f.size, status: "uploading" as const })),
+      ...imgs.map((f) => ({ file: f, name: f.name, size: f.size, kind: "image" as const, status: "uploading" as const })),
+      ...zips.map((f) => ({
+        file: f, name: f.name, size: f.size, kind: "zip" as const,
+        status: "uploading" as const, loaded: 0, total: f.size,
+      })),
     ]);
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
+
+    // 개별 이미지 → 스토리지 직접 업로드 (매니페스트는 commit 때 합침)
+    for (let i = 0; i < imgs.length; i++) {
+      const f = imgs[i];
       const idx = start + i;
       try {
-        const { storage_path } = await uploadProductImage(f, wid, `bulk/${Date.now()}-${i}-${f.name}`);
-        setImages((prev) =>
-          prev.map((it, j) => (j === idx ? { ...it, status: "done", storage_path } : it))
-        );
-      } catch {
+        const { storage_path } = await uploadProductImage(f, wid, `bulk/${stamp}-${i}-${f.name}`);
+        setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "done", storage_path } : it)));
+      } catch (e) {
         setImgFailed(true);
+        setImgErrMsg(e instanceof Error ? e.message : null);
+        setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "error" } : it)));
+      }
+    }
+
+    // ZIP → Storage staging(압축해제+썸네일). 등록/매칭은 commit 때. 진행률 표시.
+    for (let z = 0; z < zips.length; z++) {
+      const f = zips[z];
+      const idx = start + imgs.length + z;
+      try {
+        const res = await stageZip(f, (loaded, total) =>
+          setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, loaded, total } : it)))
+        );
+        setImages((prev) =>
+          prev.map((it, j) =>
+            j === idx ? { ...it, status: "done", loaded: it.total, manifest: res.manifest } : it
+          )
+        );
+      } catch (e) {
+        setImgFailed(true);
+        setImgErrMsg(e instanceof Error ? e.message : null);
         setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "error" } : it)));
       }
     }
   }
 
-  /* ── step 1 → 2: 매니페스트 자동매칭 ── */
-  async function goAttach() {
-    if (!ingest) return;
-    const manifest = images
-      .filter((i) => i.status === "done" && i.storage_path)
-      .map((i) => ({ original_filename: i.name, storage_path: i.storage_path! }));
-    setAttaching(true);
-    try {
-      if (manifest.length) {
-        const res = await attachImages(ingest.job_id, manifest);
-        setAttachResult({ matched: res.matched, unmatched: res.unmatched });
-      } else {
-        setAttachResult({ matched: [], unmatched: [] });
+  /* ── step 2 → 3: 커밋 — 상품 생성 + 이미지 매칭을 한 번에(여기서 처음 DB 저장) ── */
+  async function goCommit() {
+    if (!excel || committing) return;
+    const manifest: ImageManifestItem[] = [];
+    for (const it of images) {
+      if (it.status !== "done") continue;
+      if (it.kind === "image" && it.storage_path) {
+        manifest.push({ original_filename: it.name, storage_path: it.storage_path });
+      } else if (it.kind === "zip" && it.manifest) {
+        manifest.push(...it.manifest);
       }
-      setStep(2);
-    } catch {
-      setImgFailed(true);
+    }
+    setCommitting(true);
+    setCommitErr(null);
+    try {
+      const res = await commitUpload(excel, manifest);
+      setCommitResult(res);
+      setStep(3);
+    } catch (e) {
+      setCommitErr(e instanceof Error ? e.message : "상품 등록에 실패했습니다.");
     } finally {
-      setAttaching(false);
+      setCommitting(false);
     }
   }
 
   function reset() {
     setStep(0);
     setExcel(null);
-    setIngest(null);
-    setIngestErr(null);
+    setValidating(false);
+    setPreview(null);
+    setValidateErr(null);
     setImages([]);
     setSkipped(0);
-    setAttachResult(null);
     setImgFailed(false);
+    setImgErrMsg(null);
+    setBigZipMsg(null);
+    setCommitting(false);
+    setCommitErr(null);
+    setCommitResult(null);
   }
 
-  const createdCount = ingest?.created.length ?? 0;
-  const errorCount = ingest?.errors.length ?? 0;
-  const imgDone = images.filter((i) => i.status === "done").length;
+  const createdCount = commitResult?.created.length ?? 0;
+  const errorCount = commitResult?.errors.length ?? 0;
+  const imgDone = (commitResult?.matched.length ?? 0) + (commitResult?.unmatched.length ?? 0);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -145,7 +207,7 @@ export default function BulkPage() {
       </div>
       <h1 className="text-2xl font-extrabold tracking-tight text-foreground">대량 등록 마법사</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        표준 엑셀(상품 데이터)과 제품 이미지를 업로드하여 마스터 카탈로그를 생성하세요.
+        표준 엑셀(상품 데이터)과 제품 이미지를 올리면, 마지막 “완료” 단계에서 한 번에 등록됩니다.
       </p>
 
       <div className="my-9 px-2">
@@ -156,9 +218,9 @@ export default function BulkPage() {
         <StepFile
           excel={excel}
           onPick={setExcel}
-          ingesting={ingesting}
-          error={ingestErr}
-          onNext={goIngest}
+          ingesting={validating}
+          error={validateErr}
+          onNext={goValidate}
           onCancel={() => router.push("/products")}
         />
       )}
@@ -168,27 +230,34 @@ export default function BulkPage() {
           <StepImageError
             total={images.length}
             failed={images.filter((i) => i.status === "error").length}
-            onRetry={() => setImgFailed(false)}
+            message={imgErrMsg}
+            onRetry={() => {
+              setImgFailed(false);
+              setImgErrMsg(null);
+            }}
             onBack={() => setStep(0)}
-            onNext={goAttach}
+            onNext={() => setStep(2)}
           />
         ) : (
           <StepImage
             images={images}
             skipped={skipped}
+            bigZipMsg={bigZipMsg}
             onAdd={addImages}
             onRemove={(i) => setImages((prev) => prev.filter((_, j) => j !== i))}
-            attaching={attaching}
             onBack={() => setStep(0)}
-            onNext={goAttach}
+            onNext={() => setStep(2)}
           />
         ))}
 
       {step === 2 && (
         <StepValidate
-          errors={ingest?.errors ?? []}
+          errors={preview?.errors ?? []}
+          dropped={preview?.dropped ?? 0}
+          committing={committing}
+          commitErr={commitErr}
           onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
+          onNext={goCommit}
         />
       )}
 
@@ -197,8 +266,8 @@ export default function BulkPage() {
           created={createdCount}
           images={imgDone}
           errors={errorCount}
-          unmatched={attachResult?.unmatched.length ?? 0}
-          jobId={ingest?.job_id ?? ""}
+          unmatched={commitResult?.unmatched.length ?? 0}
+          jobId={commitResult?.job_id ?? ""}
           onRestart={reset}
         />
       )}
@@ -295,27 +364,28 @@ function StepFile({
 function StepImage({
   images,
   skipped,
+  bigZipMsg,
   onAdd,
   onRemove,
-  attaching,
   onBack,
   onNext,
 }: {
   images: ImgItem[];
   skipped: number;
+  bigZipMsg: string | null;
   onAdd: (f: FileList | null) => void;
   onRemove: (i: number) => void;
-  attaching: boolean;
   onBack: () => void;
   onNext: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const busy = images.some((i) => i.status === "uploading"); // 업로드 진행 중엔 다음 단계 잠금
   return (
     <div>
       <div className="text-xs font-semibold text-muted-foreground">2단계</div>
       <h2 className="mt-1 text-xl font-bold text-foreground">제품 이미지 업로드</h2>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        상품 데이터와 매칭할 제품 이미지를 업로드하세요. 파일명에 품번이 포함되면 자동 매칭됩니다. (선택)
+        상품 데이터와 매칭할 제품 이미지들을 업로드하세요. 압축 파일(.zip) 또는 여러 개별 파일을 한꺼번에 올릴 수 있습니다.
       </p>
 
       <DropZone onClick={() => ref.current?.click()} onFiles={onAdd} className="mt-6">
@@ -323,12 +393,14 @@ function StepImage({
           <Cloud width={26} height={26} />
         </span>
         <div className="mt-4 font-semibold text-foreground">이미지 파일을 드래그 앤 드롭하거나 클릭하여 선택하세요</div>
-        <div className="text-sm text-muted-foreground">JPG, PNG 지원</div>
+        <span className="mt-3 rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted-foreground">
+          JPG · PNG · ZIP 지원 · ZIP 1개당 최대 {MAX_ZIP_MB}MB
+        </span>
       </DropZone>
       <input
         ref={ref}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/jpeg,image/png,.zip,application/zip,application/x-zip-compressed"
         multiple
         className="hidden"
         onChange={(e) => onAdd(e.target.files)}
@@ -337,7 +409,14 @@ function StepImage({
       {skipped > 0 && (
         <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-fg)]">
           <AlertTriangle width={16} height={16} className="mt-0.5 shrink-0" />
-          지원되지 않는 형식 {skipped}건이 제외되었습니다. (JPG·PNG만 허용)
+          지원되지 않는 형식 {skipped}건이 제외되었습니다. (JPG·PNG·ZIP만 허용)
+        </div>
+      )}
+
+      {bigZipMsg && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-fg)]">
+          <AlertTriangle width={16} height={16} className="mt-0.5 shrink-0" />
+          {bigZipMsg}
         </div>
       )}
 
@@ -348,34 +427,7 @@ function StepImage({
           </div>
           <div className="space-y-2.5">
             {images.map((im, i) => (
-              <Card key={`${im.name}-${i}`} className="flex items-center gap-3 px-4 py-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-subtle text-border-strong">
-                  <TableIcon width={16} height={16} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-foreground">{im.name}</div>
-                  <div className="text-xs text-muted-foreground">{(im.size / 1024 / 1024).toFixed(1)} MB</div>
-                </div>
-                {im.status === "uploading" ? (
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    <RefreshCw width={13} height={13} className="animate-spin" /> 업로드 중…
-                  </span>
-                ) : im.status === "error" ? (
-                  <Badge tone="danger">실패</Badge>
-                ) : (
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-success-fg)]">
-                    <Check width={13} height={13} /> 100%
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onRemove(i)}
-                  className="text-border-strong transition hover:text-[var(--color-danger)]"
-                  aria-label="제거"
-                >
-                  <XIcon width={16} height={16} />
-                </button>
-              </Card>
+              <ImageRow key={`${im.name}-${i}`} im={im} onRemove={() => onRemove(i)} />
             ))}
           </div>
         </div>
@@ -385,11 +437,72 @@ function StepImage({
         <Button variant="secondary" onClick={onBack}>
           이전으로
         </Button>
-        <Button onClick={onNext} loading={attaching}>
-          다음 단계로
+        <Button onClick={onNext} disabled={busy}>
+          {busy ? "업로드 중…" : "다음 단계로"}
         </Button>
       </div>
     </div>
+  );
+}
+
+function fmtMB(b: number) {
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/* 업로드 항목 1줄 — 개별 이미지 / ZIP(진행바) 공용. 시안(2페이지) 대응. */
+function ImageRow({ im, onRemove }: { im: ImgItem; onRemove: () => void }) {
+  const isZip = im.kind === "zip";
+  const pct =
+    im.status === "done"
+      ? 100
+      : im.total && im.loaded != null
+        ? Math.min(99, Math.round((im.loaded / im.total) * 100))
+        : 0;
+  return (
+    <Card className="overflow-hidden px-4 py-3">
+      <div className="flex items-center gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-subtle text-border-strong">
+          {isZip ? <Archive width={16} height={16} /> : <ImageIcon width={16} height={16} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-foreground">{im.name}</div>
+          <div className="text-xs text-muted-foreground">
+            {isZip && im.status === "uploading" && im.total
+              ? `${fmtMB(im.loaded ?? 0)} / ${fmtMB(im.total)}`
+              : fmtMB(im.size)}
+          </div>
+        </div>
+        {im.status === "uploading" ? (
+          <div className="flex flex-col items-end gap-0.5 text-xs font-semibold text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <RefreshCw width={13} height={13} className="animate-spin" />
+              {isZip ? `${pct}%` : "업로드 중…"}
+            </span>
+            {isZip && <span className="text-[11px] text-muted-foreground">업로드 중…</span>}
+          </div>
+        ) : im.status === "error" ? (
+          <Badge tone="danger">실패</Badge>
+        ) : (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-success-fg)]">
+            <Check width={13} height={13} /> 100%
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-border-strong transition hover:text-[var(--color-danger)]"
+          aria-label="제거"
+        >
+          <XIcon width={16} height={16} />
+        </button>
+      </div>
+
+      {isZip && im.status === "uploading" && (
+        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-subtle">
+          <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -397,12 +510,14 @@ function StepImage({
 function StepImageError({
   total,
   failed,
+  message,
   onRetry,
   onBack,
   onNext,
 }: {
   total: number;
   failed: number;
+  message: string | null;
   onRetry: () => void;
   onBack: () => void;
   onNext: () => void;
@@ -426,9 +541,9 @@ function StepImageError({
         </div>
         <div className="mt-3 space-y-3 border-t border-divider pt-3 text-sm">
           <div>
-            <div className="font-semibold text-[var(--color-danger-fg)]">스토리지 업로드 실패</div>
+            <div className="font-semibold text-[var(--color-danger-fg)]">업로드 실패</div>
             <p className="text-muted-foreground">
-              일부 파일이 Storage(product-images 버킷)에 업로드되지 못했습니다. 버킷 생성 여부와 네트워크 상태를 확인해 주세요.
+              {message ?? "일부 파일을 업로드하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요."}
             </p>
           </div>
         </div>
@@ -450,10 +565,16 @@ function StepImageError({
 /* ── Step 3: 데이터 검증 ─────────────────────────────────────────────────── */
 function StepValidate({
   errors,
+  dropped,
+  committing,
+  commitErr,
   onBack,
   onNext,
 }: {
-  errors: IngestResult["errors"];
+  errors: ExcelPreview["errors"];
+  dropped: number;
+  committing: boolean;
+  commitErr: string | null;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -475,6 +596,13 @@ function StepValidate({
           </span>
         )}
       </p>
+
+      {dropped > 0 && (
+        <div className="mx-auto mt-4 flex max-w-2xl items-start gap-2.5 rounded-[var(--radius)] bg-surface-muted px-4 py-3 text-left text-sm text-muted-foreground">
+          <Info width={16} height={16} className="mt-0.5 shrink-0" />
+          품번이 없는 {dropped}개 행은 자동으로 제외했습니다.
+        </div>
+      )}
 
       <Card className="mx-auto mt-6 max-w-2xl overflow-hidden text-left">
         <table className="w-full text-left text-sm">
@@ -512,16 +640,22 @@ function StepValidate({
         )}
       </Card>
 
-      <div className="mt-7 flex items-center justify-end gap-3 border-t border-divider pt-5">
-        {!ok && (
-          <Button variant="secondary" onClick={onNext}>
-            오류 건너뛰기
-          </Button>
-        )}
-        <Button variant="secondary" onClick={onBack}>
+      {commitErr && (
+        <div className="mx-auto mt-5 max-w-2xl rounded-[var(--radius)] bg-[var(--color-danger-bg)] px-4 py-3 text-left text-sm text-[var(--color-danger-fg)]">
+          {commitErr}
+        </div>
+      )}
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        “{ok ? "상품 등록" : "오류 건너뛰고 등록"}”을 누르면 이때 실제로 상품이 등록됩니다.
+      </p>
+      <div className="mt-3 flex items-center justify-end gap-3 border-t border-divider pt-5">
+        <Button variant="secondary" onClick={onBack} disabled={committing}>
           이전으로
         </Button>
-        <Button onClick={onNext}>다음 단계로</Button>
+        <Button onClick={onNext} loading={committing}>
+          {ok ? "상품 등록" : "오류 건너뛰고 등록"}
+        </Button>
       </div>
     </div>
   );

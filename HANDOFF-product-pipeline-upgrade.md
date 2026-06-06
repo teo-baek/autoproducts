@@ -1,7 +1,15 @@
 # HANDOFF — 상품등록 엑셀/이미지 파이프라인 고도화 (jinsup_dev 흡수)
 
-> ✅ **3파트 모두 구현 완료 (2026-06-06)** — 백엔드 **115 passed**. 아래 "완료 내역" 참고.
-> ⚠️ **사용자 잔여 액션**: ① 마이그레이션 `_08`(`product_images.thumbnail_path`) SQL Editor 실행 ② `product-images` 버킷(공개) 생성 ③ (이전 분) `_07` 실행.
+> ✅ **3파트 + ZIP + 커밋시점 리팩터 완료 (2026-06-06)** — 백엔드 **130 passed**, 프론트 build·lint OK.
+> ⚠️ **사용자 잔여 액션(SQL Editor)**: ① `_07` ② `_08`(thumbnail_path) ③ **`_09`(품번 유일성 제거 — 새 흐름 필수)** ④ `product-images` 버킷(공개) 생성. 테스트 데이터 정리는 `backend/seeds/cleanup_test_products.sql`.
+>
+> ### 🔧 추가 변경 (이 세션 후반, 위 "완료 내역" 외)
+> - **파일명 매칭 보강**: 숫자런 추출 + 경계가드 부분일치(글자+숫자 붙은 파일명도 매칭, `상품5015.jpg`/`셔츠ABC123.jpg`). 품번은 유일키 아님.
+> - **ZIP 업로드**: 서버 staging 방식 — `POST /uploads/zip/stage`(압축해제+썸네일→Storage staging, manifest 반환). Cloud Run 512Mi 대비 **배치+워커 제한+크기 100MB 가드**. (시안 2p UI: 진행바/용량)
+> - **빈 품번 행 = 폐기**(상품명 대용 안 함, `ParseResult.dropped`).
+> - **품번 유일성 제거(`_09`)** + **연속 (품번,상품명) 블록 그룹핑**(`_group_rows`) — 같은 품번의 다른 상품 허용.
+> - **에러 메시지 친화화**: raw DB/버킷명 노출 제거(서버 로그로만). 중복=「이미 등록된 품번입니다」.
+> - **커밋 시점 = 4단계**: `POST /uploads/excel/validate`(드라이런)→`/zip/stage`→`/uploads/commit`(상품 생성+이미지 매칭 한 번에). 마법사가 1·2단계에선 DB 미기록, 마지막 "상품 등록"에서 저장. **옛 `/uploads/excel`·`/images`·`/images/zip` 라우트 제거.**
 > 다음 세션 시작 경로: `HANDOFF-product-pipeline-upgrade.md`
 > 작성: 2026-06-06 / 브랜치: `v2-dev` / 백엔드 **93→115 passed**
 > 같이 보기: [HANDOFF-product-registration.md](HANDOFF-product-registration.md)(상품등록 구현분) · [HANDOFF.md](HANDOFF.md)(백엔드 전반) · 규칙 [CLAUDE.md](CLAUDE.md)
@@ -21,9 +29,15 @@
 - `SupabaseUploadRepo.download_object/upload_object`(service key, `upsert`). 엔티티 `ProductImage.thumbnail_path` 추가. 마이그레이션 `_08`.
 
 **③ 파일명→품번 매칭** — `services/image_match.py`
-- 정규화: 확장자 제거→끝 `.0` 제거→trim. 후보 `[정규화 전체, *(_-공백 토큰)]`(토큰도 `.0` 제거). 정확 일치 먼저(전체→토큰)→대소문자 무시 폴백.
+- 정규화: 확장자 제거→끝 `.0` 제거→trim. 후보 `[정규화 전체, *(_-공백 토큰), *숫자런(\\d+)]`. 정확 일치 먼저(전체→토큰→숫자런)→대소문자 무시→**경계 가드 부분일치**(긴 품번 우선).
+- ⚠️ "숫자만 뽑는" 게 아니라 **실제 품번(영숫자 포함)과 대조**. 숫자런 후보로 `상품5015.jpg`(글자+숫자 붙음)도 잡고, 부분일치로 `셔츠ABC123.jpg`도 잡되, `5015`에 `501`이 박히는 식의 오매칭은 경계 가드로 차단.
 
-테스트: `test_image_process.py`(신규), `test_image_match.py`·`test_excel_parse.py`·`test_uploads_service.py`(확장).
+**④ ZIP 일괄 업로드 (추가 요청 — 2026-06-06)** — `services/uploads.py` + `routers/uploads.py` + 프론트
+- `extract_zip_images()`(stdlib `zipfile`, 이미지 확장자 필터, `__MACOSX`/`._`/`.DS_Store` 제외, **Windows cp437 한글 파일명 복구**, 최대 1000장), `ingest_image_zip()`(원본 Storage 업로드+썸네일 가공+품번 매칭+job 갱신, `ThreadPoolExecutor`). `_process_one_image`→`_thumbnail_from_bytes` 리팩터로 ZIP은 재다운로드 없이 처리.
+- 라우터 `POST /uploads/images/zip`(multipart, `Form` job_id). 의존성 추가 없음(stdlib).
+- 프론트: `lib/products.ts` `uploadImagesZip()`(XHR 업로드 진행률), `bulk` 2단계 UI를 **시안 2페이지**대로 — 드롭존 "JPG · PNG · ZIP 지원 · ZIP 1개당 최대 1,000장"(시안의 "500MB"는 강제값이 아니라 실제 강제 기준=1000장으로 문구 교체), 업로드 행에 진행바/`loaded MB / total MB`/`%`, ZIP=아카이브 아이콘. `goAttach`가 개별 이미지(attachImages)+ZIP 서버결과 병합.
+
+테스트: `test_image_process.py`(신규), `test_image_match.py`·`test_excel_parse.py`·`test_uploads_service.py`(확장, ZIP/매칭 포함). 백엔드 **125 passed**, 프론트 **build·lint 통과**.
 
 ### 후속 메모(범위 밖, 필요 시)
 - 대량(수백 장) 시 동기 가공이 길면 `upload_job` 에 `processing` 상태 + 백그라운드 잡으로(현재 MVP=병렬+격리 동기).

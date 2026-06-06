@@ -158,27 +158,103 @@ export const deleteProduct = (id: string) =>
   api(`/products/${id}`, { method: "DELETE", auth: true });
 
 /* ── 업로드 / 매칭 ──────────────────────────────────────────────────────── */
-export type IngestResult = {
-  job_id: string;
-  created: unknown[];
-  errors: { row?: number; field?: string; reason: string; source_p_number?: string }[];
+export type ParseError = { row?: number; field?: string; reason: string; source_p_number?: string };
+export type ImageManifestItem = {
+  original_filename: string;
+  storage_path: string;
+  thumbnail_path?: string | null;
 };
 
-export function uploadExcel(file: File): Promise<IngestResult> {
+// 1단계 검증(드라이런) 결과 — DB 미기록
+export type ExcelPreview = {
+  product_count: number;
+  sku_count: number;
+  errors: ParseError[];
+  dropped: number;
+};
+
+// 2단계 ZIP staging 결과 — 매니페스트만(아직 등록 X)
+export type StageResult = {
+  manifest: ImageManifestItem[];
+  processed: { ok: number; none: number; error: number };
+};
+
+// 4단계 커밋 결과 — 상품 생성 + 이미지 매칭
+export type CommitResult = {
+  job_id: string;
+  created: unknown[];
+  errors: ParseError[];
+  dropped: number;
+  matched: string[];
+  unmatched: string[];
+};
+
+// 1단계: 엑셀 검증만(드라이런). 상품은 4단계 commit 에서 저장.
+export function validateExcel(file: File): Promise<ExcelPreview> {
   const fd = new FormData();
   fd.append("file", file);
-  return api<IngestResult>("/uploads/excel", { method: "POST", body: fd, auth: true });
+  return api<ExcelPreview>("/uploads/excel/validate", { method: "POST", body: fd, auth: true });
 }
 
-export const attachImages = (
-  job_id: string,
-  images: { original_filename: string; storage_path: string }[]
-) =>
-  api<{ matched: string[]; unmatched: string[]; images: unknown[] }>("/uploads/images", {
-    method: "POST",
-    body: JSON.stringify({ job_id, images }),
-    auth: true,
+// 멀티파트 + 업로드 진행률(XHR) 공용 헬퍼. fetch 는 업로드 진행률 미지원이라 XHR 사용.
+async function xhrUpload<T>(
+  path: string,
+  fd: FormData,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as T);
+        } catch {
+          reject(new Error("서버 응답을 해석하지 못했습니다."));
+        }
+      } else {
+        let detail = `업로드 실패 (${xhr.status})`;
+        try {
+          const b = JSON.parse(xhr.responseText);
+          if (b?.detail) detail = typeof b.detail === "string" ? b.detail : JSON.stringify(b.detail);
+        } catch {
+          /* 본문 없음 */
+        }
+        reject(new Error(detail));
+      }
+    };
+    xhr.onerror = () => reject(new Error("네트워크 오류로 업로드에 실패했습니다."));
+    xhr.send(fd);
   });
+}
+
+// 2단계: ZIP 을 Storage(staging) 에 올리고 매니페스트만 받음(아직 등록 X).
+export function stageZip(
+  file: File,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<StageResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return xhrUpload<StageResult>("/uploads/zip/stage", fd, onProgress);
+}
+
+// 4단계: 검증한 엑셀 + staging 매니페스트를 한 번에 커밋(상품 생성 + 이미지 매칭).
+export function commitUpload(
+  file: File,
+  manifest: ImageManifestItem[],
+  onProgress?: (loaded: number, total: number) => void
+): Promise<CommitResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("images", JSON.stringify(manifest));
+  return xhrUpload<CommitResult>("/uploads/commit", fd, onProgress);
+}
 
 export const listUnmatched = (job_id: string) =>
   api<ProductImage[]>(`/uploads/${job_id}/unmatched`, { auth: true });

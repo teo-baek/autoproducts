@@ -39,3 +39,26 @@ def test_full_normalized_before_tokens():
     # 전체 정규화 문자열을 토큰보다 먼저 — 둘 다 키에 있으면 전체가 이김
     products = {"5015-blue": "p_full", "5015": "p_token"}
     assert match_filename_to_product("5015-blue.jpg", products) == "p_full"
+
+
+def test_glued_numeric_via_digit_run():
+    # 구분자 없이 글자+숫자가 붙은 경우('상품5015') → 숫자런 추출로 매칭
+    assert match_filename_to_product("상품5015.jpg", {"5015": "p1"}) == "p1"
+    assert match_filename_to_product("img20240501.jpg", {"20240501": "p1"}) == "p1"
+
+
+def test_glued_alnum_via_bounded_substring():
+    # 영숫자 품번이 글자에 붙은 경우('셔츠ABC123') → 경계 가드 부분일치
+    assert match_filename_to_product("셔츠ABC123.jpg", {"ABC123": "p1"}) == "p1"
+
+
+def test_no_false_short_substring():
+    # '501' 이 '5015' 안에 우연히 들어가도 (뒤가 숫자) 매칭하지 않음
+    assert match_filename_to_product("5015.jpg", {"501": "p1"}) is None
+    assert match_filename_to_product("abcd.jpg", {"abc": "p1"}) is None
+
+
+def test_substring_longest_wins():
+    # 부분일치 후보가 여럿이면 가장 긴 품번을 택함
+    products = {"abc": "p_short", "abc12": "p_long"}
+    assert match_filename_to_product("셔츠abc12.jpg", products) == "p_long"

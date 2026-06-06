@@ -1,0 +1,19 @@
+# Cloud Build 소스 업로드에서 제외 (gcloud builds submit). .dockerignore 의 gcloud 버전.
+# ※ gitignore 문법이라 인라인 주석(패턴 뒤 #) 금지 — 전체 줄 주석만.
+# .venv 등 큰 폴더를 빼서 업로드/빌드 속도 ↑ (이미지 빌드엔 app/ + pyproject.toml + uv.lock 만 필요)
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+notebooks/
+seeds/
+migrations/
+conftest.py
+requirements.txt
+.env
+.env.*
+*.md
+.git/
+.gitignore

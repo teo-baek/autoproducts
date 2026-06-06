@@ -1,20 +1,26 @@
+import json
+import logging
 import os
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.core.auth import get_current_user
 from app.core.rbac import require_approved, require_role
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
-from app.schemas.upload import AttachImagesRequest, MatchRequest
+from app.schemas.upload import MatchRequest
 from app.services.excel_parse import ExcelFormatError
 from app.services.platform_code import next_platform_code
 from app.services.uploads import (
-    UploadError, UploadForbidden, attach_images, ingest_excel, list_unmatched, resolve_match,
+    _ZIP_MAX_BYTES, UploadError, UploadForbidden, attach_images, ingest_excel,
+    list_unmatched, preview_excel, resolve_match, stage_zip_to_manifest,
 )
 
+_EXCEL_EXTS = (".xlsx", ".xls", ".csv")
+
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+log = logging.getLogger("ezmerce.uploads")
 _wholesaler = require_role("wholesaler")
 
 
@@ -54,7 +60,14 @@ class SupabaseUploadRepo:
         return {r["source_p_number"]: r["id"] for r in rows}
 
     def insert_images(self, rows):
-        return self.sb.table("product_images").insert(rows).execute().data
+        try:
+            return self.sb.table("product_images").insert(rows).execute().data
+        except Exception as e:
+            # _08(thumbnail_path) 미적용 환경 호환 — 컬럼 없이 재시도(썸네일 경로만 보류, 원본은 정상)
+            if "thumbnail_path" in str(e):
+                stripped = [{k: v for k, v in r.items() if k != "thumbnail_path"} for r in rows]
+                return self.sb.table("product_images").insert(stripped).execute().data
+            raise
 
     # ── Storage(이미지 가공용) ── service key 라 RLS 우회; 경로는 도매 스코프로 프론트가 생성 ──
     def download_object(self, path, bucket="product-images"):
@@ -95,40 +108,86 @@ def _run(fn):
         raise HTTPException(400, str(e))
 
 
-@router.post("/excel")
-async def upload_excel(file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
-    """표준 엑셀 업로드(multipart) → 품번별 상품 일괄생성 (FR-2.2)."""
-    _guard(user)
+async def _save_excel_temp(file: UploadFile) -> str:
+    """업로드 엑셀을 임시파일로 저장하고 경로 반환(파서가 확장자로 형식 분기). 미지원이면 400."""
     fn = (file.filename or "").lower()
-    ext = next((e for e in (".xlsx", ".xls", ".csv") if fn.endswith(e)), None)
+    ext = next((e for e in _EXCEL_EXTS if fn.endswith(e)), None)
     if ext is None:
-        # 미지원 형식 — 깔끔한 400 으로(처리 안 된 예외 → 500 은 CORS 헤더가 빠져 'CORS 오류'로 보임)
         raise HTTPException(400, "엑셀(.xlsx/.xls) 또는 CSV(.csv) 파일만 지원합니다.")
     data = await file.read()
-    with NamedTemporaryFile(suffix=ext, delete=False) as tmp:  # 실제 확장자 유지(파서가 형식 분기)
+    with NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(data)
-        path = tmp.name
+        return tmp.name
+
+
+@router.post("/excel/validate")
+async def validate_excel(file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
+    """1단계 — 엑셀 검증만(드라이런). DB 에 쓰지 않고 미리보기(상품/SKU 수)·오류·폐기수만 반환."""
+    _guard(user)
+    path = await _save_excel_temp(file)
     try:
-        out = ingest_excel(SupabaseUploadRepo(), user.wholesaler_id, path,
-                           created_by=user.id, source_label=file.filename)
-    except HTTPException:
-        raise
-    except ExcelFormatError as e:  # 필수 컬럼 누락 등 파일 단위 형식 오류 — 그대로 안내
+        return preview_excel(path)
+    except ExcelFormatError as e:
         raise HTTPException(400, str(e))
-    except Exception as e:  # 파싱/DB 오류를 친화 400 으로 변환(500 → 가짜 CORS 오류 방지)
-        raise HTTPException(400, f"엑셀 처리 중 오류 — 파일 형식·내용을 확인해주세요. ({str(e)[:160]})")
+    except Exception:
+        log.exception("엑셀 검증 실패 wid=%s", user.wholesaler_id)
+        raise HTTPException(400, "엑셀을 읽는 중 오류가 발생했습니다. 파일 형식·내용을 확인해주세요.")
     finally:
         os.unlink(path)
-    return {"job_id": out["job"]["id"], "created": out["products"], "errors": out["errors"]}
 
 
-@router.post("/images")
-def upload_images(req: AttachImagesRequest, user: CurrentUser = Depends(get_current_user)):
-    """프론트가 Storage 에 올린 이미지 매니페스트 → 품번 자동매칭 (FR-2.3)."""
+@router.post("/zip/stage")
+async def stage_zip(file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
+    """2단계 — ZIP 의 이미지를 Storage(staging)에 올리고 매니페스트만 반환(아직 등록 X)."""
     _guard(user)
-    return _run(lambda: attach_images(
-        SupabaseUploadRepo(), req.job_id, [i.model_dump() for i in req.images],
-        created_by=user.id, caller_wid=user.wholesaler_id))
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(400, "ZIP(.zip) 파일만 지원합니다.")
+    if file.size and file.size > _ZIP_MAX_BYTES:   # 큰 파일은 메모리에 읽기 전에 차단(운영 512Mi 보호)
+        raise HTTPException(
+            400, f"ZIP 용량이 너무 큽니다(최대 {_ZIP_MAX_BYTES // (1024 * 1024)}MB). 사진을 나눠서 올려주세요.")
+    data = await file.read()
+    try:
+        return stage_zip_to_manifest(SupabaseUploadRepo(), user.wholesaler_id, data)
+    except UploadError as e:
+        raise HTTPException(400, str(e))
+    except Exception:
+        log.exception("ZIP staging 실패 wid=%s", user.wholesaler_id)
+        raise HTTPException(400, "ZIP 처리 중 오류가 발생했습니다. 파일을 확인해주세요.")
+
+
+@router.post("/commit")
+async def commit_upload(file: UploadFile = File(...), images: str = Form("[]"),
+                        user: CurrentUser = Depends(get_current_user)):
+    """4단계 — 검증한 엑셀 + staging 매니페스트(images=JSON)를 받아 상품 생성 + 이미지 매칭을 한 번에."""
+    _guard(user)
+    try:
+        manifest = json.loads(images) if images else []
+        assert isinstance(manifest, list)
+    except (ValueError, TypeError, AssertionError):
+        raise HTTPException(400, "이미지 매니페스트 형식이 올바르지 않습니다.")
+
+    path = await _save_excel_temp(file)
+    repo = SupabaseUploadRepo()
+    try:
+        out = ingest_excel(repo, user.wholesaler_id, path, created_by=user.id, source_label=file.filename)
+    except ExcelFormatError as e:
+        raise HTTPException(400, str(e))
+    except Exception:
+        log.exception("커밋(엑셀) 실패 wid=%s", user.wholesaler_id)
+        raise HTTPException(400, "상품 등록 중 오류가 발생했습니다. 파일 형식·내용을 확인해주세요.")
+    finally:
+        os.unlink(path)
+
+    job_id = out["job"]["id"]
+    matched, unmatched = [], []
+    if manifest and out["products"]:        # 상품이 생겨야 이미지 매칭 가능
+        try:
+            res = attach_images(repo, job_id, manifest, created_by=user.id, caller_wid=user.wholesaler_id)
+            matched, unmatched = res.get("matched", []), res.get("unmatched", [])
+        except Exception:                   # 상품은 이미 생성됨 — 이미지 매칭만 실패(미매칭 관리에서 보강)
+            log.exception("커밋(이미지 매칭) 실패 job=%s", job_id)
+    return {"job_id": job_id, "created": out["products"], "errors": out["errors"],
+            "dropped": out.get("dropped", 0), "matched": matched, "unmatched": unmatched}
 
 
 @router.get("/jobs")

@@ -40,6 +40,7 @@ class ExcelFormatError(Exception):
 class ParseResult:
     rows: list[dict] = field(default_factory=list)
     errors: list[dict] = field(default_factory=list)   # {row, field, reason}
+    dropped: int = 0   # 품번 없어 폐기한 행 수(에러 아님 — 사용자 정책)
 
 
 def _to_int(v) -> int:
@@ -133,17 +134,16 @@ def _validate_into(cells: list, row_index: int, res: ParseResult, col: dict) -> 
     if all(v in (None, "") for v in rec.values()):   # 완전 빈 행은 건너뜀
         return
 
-    # 품번이 비면 상품명을 품번 대용으로 사용(사용자 결정 — 데이터 손실 방지).
-    # 품번·상품명 둘 다 없으면 식별 불가 → 아래 필수검증에서 오류로 제외("비워둠").
+    # 품번이 없으면 행 자체를 폐기한다(사용자 정책 — 상품명 대용 안 함).
+    # 에러로 잡지 않고 dropped 로만 집계(POS 합계/소계 같은 잡행을 조용히 버림).
     if not (rec.get("source_p_number") is not None and str(rec["source_p_number"]).strip()):
-        nm = rec.get("item_name")
-        if nm is not None and str(nm).strip():
-            rec["source_p_number"] = str(nm).strip()
+        res.dropped += 1
+        return
+    rec["source_p_number"] = str(rec["source_p_number"]).strip()
 
     errs: list[dict] = []
-    for key in ("source_p_number", "item_name"):       # 필수 텍스트
-        if not (rec.get(key) is not None and str(rec[key]).strip()):
-            errs.append({"row": row_index, "field": _FIELD_LABEL[key], "reason": "필수 값이 누락되었습니다"})
+    if not (rec.get("item_name") is not None and str(rec["item_name"]).strip()):   # 상품명 필수
+        errs.append({"row": row_index, "field": "상품명", "reason": "필수 값이 누락되었습니다"})
     if rec.get("wholesale_price") in (None, ""):        # 도매가 = 필수 + 숫자
         errs.append({"row": row_index, "field": "도매가", "reason": "필수 값이 누락되었습니다"})
     else:

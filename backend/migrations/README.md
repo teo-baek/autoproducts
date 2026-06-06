@@ -13,6 +13,7 @@ Supabase **SQL Editor**에 아래 파일들을 **순서대로** 붙여넣어 실
 6. `2026-06-05_v2_core_06_register_fields.sql` — 회원가입 확장: `profiles.company_name`/`business_cert_path`/`id_doc_path` + 비공개 `business-docs` 버킷
 7. `2026-06-06_v2_core_07_product_category.sql` — 상품 분류 `products.category`(의류/잡화 등) + 부분 인덱스. 도매 상품관리 목록 필터·단일 등록 모달용. **(상품관리 화면의 카테고리 기능에 필요)**
 8. `2026-06-06_v2_core_08_image_thumbnail.sql` — `product_images.thumbnail_path`. 서버측 이미지 가공(EXIF 보정+웹 리사이즈) 산출물 경로. NULL=미가공→원본 폴백. **(이미지 업로드 가공 파이프라인에 필요)**
+9. `2026-06-06_v2_core_09_pnum_not_unique.sql` — **품번 유일성 제거**. POS 품번은 유일키 아님(같은 품번이 서로 다른 상품일 수 있음) → `(도매,품번)` 부분 유니크 인덱스 드롭 + 비유일 lookup 인덱스. 영구 식별자는 `platform_code`. **(같은 품번의 서로 다른 상품 등록·대량업로드에 필요)**
 
 ## Storage 버킷 (대시보드 또는 SQL)
 - **`product-images`** — 상품 이미지 업로드용. **공개(public) 권장**(상품 사진은 카탈로그 노출이 목적). 프론트가 직접 업로드 → `representative_image_url`(public URL) 저장 + 매니페스트 매칭. 미생성 시 단일/대량 등록의 이미지 업로드만 실패(상품 데이터 등록은 정상).

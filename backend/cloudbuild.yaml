@@ -1,0 +1,19 @@
+# Cloud Build — 백엔드 이미지 빌드 + Artifact Registry push (배포는 안 함).
+# `make deploy` 가 이걸로 빌드한 뒤, gcloud run deploy 로 따로 배포한다.
+# (빌드/배포 분리 → Cloud Build 서비스계정 권한 이슈 최소화)
+#
+# 빌드 컨텍스트 = backend/  → Dockerfile = ./Dockerfile
+# _IMAGE 는 Makefile 이 주입(REGION-docker.pkg.dev/PROJECT/REPO/SERVICE:TAG).
+
+options:
+  logging: CLOUD_LOGGING_ONLY        # 사용자 지정 SA + 버킷 없이도 빌드 로그 OK
+
+substitutions:
+  _IMAGE: ''                         # Makefile --substitutions 로 주입
+
+images:
+  - '${_IMAGE}'
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_IMAGE}', '.']

@@ -1,7 +1,8 @@
 import openpyxl
 import pytest
 from app.services.uploads import (
-    ingest_excel, attach_images, resolve_match, list_unmatched, UploadError, UploadForbidden,
+    ingest_excel, attach_images, preview_excel, stage_zip_to_manifest, resolve_match,
+    list_unmatched, UploadError, UploadForbidden,
 )
 
 
@@ -72,6 +73,42 @@ def test_ingest_excel_groups_rows_into_products_and_skus(tmp_path):
     assert out["job"]["status"] == "needs_matching"
     assert out["job"]["total_rows"] == 3
     assert repo.products[0]["created_by"] == "staff-1"
+
+
+def test_ingest_excel_noncontiguous_same_pnum_splits(tmp_path):
+    # 품번은 유일키가 아님 — 같은 품번이 떨어져 다시 나오면 별개 상품으로 분리(연속 블록 그룹핑)
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [
+        ("915", "블라우스A", "화이트", "F", 10000, 20000),
+        ("700", "팬츠", "블랙", "M", 15000, 30000),
+        ("915", "원피스B", "레드", "F", 18000, 36000),     # 같은 품번 915, 떨어져 등장 → 별개
+    ])
+    out = ingest_excel(FakeUploadRepo(), "w1", str(p))
+    assert len(out["products"]) == 3
+    assert [pr["item_name"] for pr in out["products"]] == ["블라우스A", "팬츠", "원피스B"]
+
+
+def test_ingest_excel_adjacent_same_pnum_diff_name_splits(tmp_path):
+    # 인접해도 상품명이 다르면 별개 상품
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [
+        ("915", "블라우스A", "화이트", "F", 10000, 20000),
+        ("915", "원피스B", "레드", "F", 18000, 36000),
+    ])
+    out = ingest_excel(FakeUploadRepo(), "w1", str(p))
+    assert len(out["products"]) == 2
+
+
+def test_ingest_excel_contiguous_same_pnum_name_groups(tmp_path):
+    # 연속된 같은 (품번, 상품명) = 한 상품의 여러 SKU
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [
+        ("915", "블라우스", "화이트", "F", 10000, 20000),
+        ("915", "블라우스", "블랙", "F", 10000, 20000),
+    ])
+    repo = FakeUploadRepo()
+    out = ingest_excel(repo, "w1", str(p))
+    assert len(out["products"]) == 1 and len(repo.skus) == 2
 
 
 def test_ingest_excel_records_parse_errors(tmp_path):
@@ -267,6 +304,117 @@ def test_attach_images_processes_unmatched_images_too():
     assert out["unmatched"] == ["9999.jpg"]
     assert out["processed"]["ok"] == 1
     assert repo.images[0]["thumbnail_path"] == "thumbs/w1/9999.jpg"
+
+
+def _zip_bytes(entries):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in entries:
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_stage_zip_uploads_and_returns_manifest():
+    # 2단계 staging — 원본+썸네일을 Storage 에 올리고 매니페스트만 반환(상품/이미지/잡 미생성)
+    repo = FakeStorageRepo()
+    z = _zip_bytes([
+        ("1001.jpg", _jpeg_bytes()),
+        ("9999.png", _jpeg_bytes()),
+        ("__MACOSX/._1001.jpg", b"junk"),         # 맥OS 잔재 → 제외
+        ("readme.txt", b"hello"),                 # 비이미지 → 제외
+    ])
+    out = stage_zip_to_manifest(repo, "w1", z)
+    assert out["processed"]["ok"] == 2
+    names = {m["original_filename"] for m in out["manifest"]}
+    assert names == {"1001.jpg", "9999.png"}
+    assert "w1/staging/1001.jpg" in repo.store          # 원본 staging 업로드
+    assert "thumbs/w1/staging/1001.jpg" in repo.store   # 썸네일 생성
+    m = next(m for m in out["manifest"] if m["original_filename"] == "1001.jpg")
+    assert m["storage_path"] == "w1/staging/1001.jpg"
+    assert m["thumbnail_path"] == "thumbs/w1/staging/1001.jpg"
+    assert repo.images == [] and repo.products == []     # DB 미기록(staging 단계)
+
+
+def test_stage_zip_no_images_raises():
+    with pytest.raises(UploadError):
+        stage_zip_to_manifest(FakeStorageRepo(), "w1", _zip_bytes([("readme.txt", b"x")]))
+
+
+def test_stage_zip_bad_zip_raises():
+    with pytest.raises(UploadError):
+        stage_zip_to_manifest(FakeStorageRepo(), "w1", b"this is definitely not a zip")
+
+
+def test_stage_zip_oversize_raises(monkeypatch):
+    import app.services.uploads as up
+    monkeypatch.setattr(up, "_ZIP_MAX_BYTES", 10)
+    with pytest.raises(UploadError):
+        up.stage_zip_to_manifest(FakeStorageRepo(), "w1", _zip_bytes([("1001.jpg", _jpeg_bytes())]))
+
+
+def test_commit_flow_stage_then_attach_with_thumbnail():
+    # 4단계 commit 흐름(서비스 단위): stage manifest → 상품 생성 → attach_images 가 staged 썸네일 재사용
+    repo = FakeStorageRepo()
+    z = _zip_bytes([("1001.jpg", _jpeg_bytes())])
+    staged = stage_zip_to_manifest(repo, "w1", z)["manifest"]
+    repo.create_upload_job({"wholesaler_id": "w1"})
+    repo.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
+                         "platform_code": "EZM-1", "item_name": "셔츠"})
+    before = dict(repo.store)
+    out = attach_images(repo, "job-1", staged, caller_wid="w1")
+    assert out["matched"] == ["1001.jpg"]
+    img = repo.images[0]
+    assert img["product_id"] == "p1"
+    assert img["thumbnail_path"] == "thumbs/w1/staging/1001.jpg"   # staged 썸네일 재사용
+    assert out["processed"] == {"ok": 0, "none": 0, "error": 0}    # 재가공 안 함(이미 썸네일 있음)
+    assert repo.store == before                                    # Storage 추가 변경 없음
+
+
+def test_zip_member_name_recovers_korean():
+    # Windows 제작 zip 의 한글 파일명(cp437 디코드 상태 + UTF-8 플래그 꺼짐) 복구
+    import zipfile
+    from app.services.uploads import _zip_member_name
+    info = zipfile.ZipInfo()
+    info.filename = "프릴원피스.jpg".encode("cp949").decode("cp437")  # Windows zip 저장 형태 모사
+    info.flag_bits = 0                                               # UTF-8 플래그 꺼짐
+    assert _zip_member_name(info) == "프릴원피스.jpg"
+
+
+def test_preview_excel_dry_run(tmp_path):
+    # 1단계 검증 — 카운트/오류/폐기수만, DB 미기록(repo 인자 자체가 없음)
+    p = tmp_path / "prev.xlsx"
+    _make_xlsx(p, [
+        ("1001", "셔츠", "화이트", "F", 12000, 29000),
+        ("1001", "셔츠", "블랙", "F", 12000, 29000),     # 같은 (품번,상품명) 연속 → 한 상품
+        ("", "품번없음", "블랙", "F", 18000, ""),          # 품번 없음 → 폐기
+    ])
+    out = preview_excel(str(p))
+    assert out["product_count"] == 1
+    assert out["sku_count"] == 2
+    assert out["dropped"] == 1
+    assert out["errors"] == []
+
+
+def test_insert_errors_friendly_duplicate_message():
+    # 재업로드 중복(UNIQUE 충돌) → raw DB JSON 이 아니라 친화 사유로 기록
+    class DupRepo(FakeUploadRepo):
+        def insert_product(self, d):
+            raise Exception(
+                "{'message': 'duplicate key value violates unique constraint "
+                "\"products_wholesaler_source_alive\"', 'code': '23505'}")
+    import openpyxl as _x
+    import tempfile, os
+    fd, p = tempfile.mkstemp(suffix=".xlsx"); os.close(fd)
+    wb = _x.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "색상", "사이즈", "도매가", "판매가"])
+    ws.append(("5015", "이미있음", "블랙", "F", 1000, 2000))
+    wb.save(p)
+    out = ingest_excel(DupRepo(), "w1", p)
+    os.unlink(p)
+    assert out["errors"][0]["reason"] == "이미 등록된 품번입니다 (중복 — 건너뜀)"
+    assert "23505" not in out["errors"][0]["reason"]      # raw DB 정보 미노출
 
 
 def test_list_unmatched_returns_only_unmatched():

@@ -1,4 +1,5 @@
 import io
+import json
 import openpyxl
 from fastapi.testclient import TestClient
 from app.main import app
@@ -69,59 +70,63 @@ def _xlsx_bytes(rows):
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
 
 
-def test_upload_excel_route_creates_products(monkeypatch):
+def test_validate_route_dry_run(monkeypatch):
+    # 1단계 — 검증만(드라이런): 상품 미생성, 미리보기 카운트만
     shared = FakeUploadRepo()
     monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
     app.dependency_overrides[get_current_user] = _wholesaler
     try:
         data = _xlsx_bytes([("1001", "셔츠", "화이트", "F", 12000, 29000)])
-        res = TestClient(app).post("/uploads/excel", files={"file": ("p.xlsx", data, XLSX_CT)})
+        res = TestClient(app).post("/uploads/excel/validate", files={"file": ("p.xlsx", data, XLSX_CT)})
         assert res.status_code == 200
-        body = res.json()
-        assert body["job_id"] == "job-1"
-        assert len(body["created"]) == 1
+        assert res.json()["product_count"] == 1
+        assert shared.products == []        # DB 미기록
     finally:
         app.dependency_overrides.clear()
 
 
-def test_upload_excel_rejects_unsupported_format(monkeypatch):
+def test_commit_route_creates_products_and_matches(monkeypatch):
+    # 4단계 — 엑셀 + 매니페스트를 한 번에 커밋(상품 생성 + 이미지 매칭)
     shared = FakeUploadRepo()
     monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
     app.dependency_overrides[get_current_user] = _wholesaler
     try:
-        # 지원 형식(.xlsx/.xls/.csv) 외 → 깔끔한 400 (예전엔 예외→500→가짜 CORS 오류)
-        res = TestClient(app).post("/uploads/excel", files={"file": ("p.txt", b"hello", "text/plain")})
+        data = _xlsx_bytes([("1001", "셔츠", "화이트", "F", 12000, 29000)])
+        manifest = json.dumps([
+            {"original_filename": "1001_a.jpg", "storage_path": "w1/1001_a.jpg"},
+            {"original_filename": "zzz.jpg", "storage_path": "w1/zzz.jpg"},
+        ])
+        res = TestClient(app).post("/uploads/commit",
+                                   files={"file": ("p.xlsx", data, XLSX_CT)}, data={"images": manifest})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["job_id"] == "job-1"
+        assert len(body["created"]) == 1
+        assert body["matched"] == ["1001_a.jpg"]
+        assert body["unmatched"] == ["zzz.jpg"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_commit_rejects_unsupported_format(monkeypatch):
+    shared = FakeUploadRepo()
+    monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
+    app.dependency_overrides[get_current_user] = _wholesaler
+    try:
+        res = TestClient(app).post("/uploads/commit",
+                                   files={"file": ("p.txt", b"hello", "text/plain")}, data={"images": "[]"})
         assert res.status_code == 400
     finally:
         app.dependency_overrides.clear()
 
 
-def test_upload_excel_requires_wholesaler(monkeypatch):
+def test_commit_requires_wholesaler(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         id="u", role="retail_seller", status="approved", seller_type="independent")
     try:
-        res = TestClient(app).post("/uploads/excel", files={"file": ("p.xlsx", b"x", XLSX_CT)})
+        res = TestClient(app).post("/uploads/commit",
+                                   files={"file": ("p.xlsx", b"x", XLSX_CT)}, data={"images": "[]"})
         assert res.status_code == 403
-    finally:
-        app.dependency_overrides.clear()
-
-
-def test_attach_images_route_splits_matched(monkeypatch):
-    shared = FakeUploadRepo()
-    shared.create_upload_job({"wholesaler_id": "w1"})
-    shared.insert_product({"wholesaler_id": "w1", "source_p_number": "1001",
-                           "platform_code": "EZM-1", "item_name": "셔츠"})
-    monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
-    app.dependency_overrides[get_current_user] = _wholesaler
-    try:
-        res = TestClient(app).post("/uploads/images", json={"job_id": "job-1", "images": [
-            {"original_filename": "1001_a.jpg", "storage_path": "w1/1001_a.jpg"},
-            {"original_filename": "zzz.jpg", "storage_path": "w1/zzz.jpg"},
-        ]})
-        assert res.status_code == 200
-        body = res.json()
-        assert body["matched"] == ["1001_a.jpg"]
-        assert body["unmatched"] == ["zzz.jpg"]
     finally:
         app.dependency_overrides.clear()
 
@@ -172,8 +177,6 @@ def test_foreign_wholesaler_cannot_touch_others_job(monkeypatch):
     try:
         c = TestClient(app)
         assert c.get("/uploads/job-1/unmatched").status_code == 404
-        assert c.post("/uploads/images", json={"job_id": "job-1", "images": [
-            {"original_filename": "x.jpg", "storage_path": "p"}]}).status_code == 404
         assert c.post("/uploads/job-1/match",
                       json={"image_id": "img1", "source_p_number": "1001"}).status_code == 404
     finally:

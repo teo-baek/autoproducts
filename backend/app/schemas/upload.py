@@ -2,9 +2,10 @@ from pydantic import BaseModel
 
 
 class ImageItem(BaseModel):
-    """프론트가 product-images Storage 버킷에 업로드한 이미지 1건의 매니페스트."""
-    original_filename: str   # 품번 토큰 매칭에 사용
-    storage_path: str        # 버킷 내 경로(프론트가 직접 업로드 후 전달)
+    """이미지 1건의 매니페스트(프론트 직접 업로드 또는 zip staging 산출)."""
+    original_filename: str             # 품번 토큰 매칭에 사용
+    storage_path: str                  # 버킷 내 원본 경로
+    thumbnail_path: str | None = None  # staging 등에서 서버 가공된 썸네일 경로(있으면 재가공 생략)
 
 
 class AttachImagesRequest(BaseModel):

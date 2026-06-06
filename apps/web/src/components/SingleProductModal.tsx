@@ -121,7 +121,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
           const { publicUrl } = await uploadProductImage(file, wholesalerId, platformCode);
           await updateProduct(productId, { representative_image_url: publicUrl });
         } catch {
-          warn = " (이미지 업로드 실패 — product-images 버킷을 확인하세요)";
+          warn = " (단, 이미지 업로드는 실패했어요 — 잠시 후 다시 시도해 주세요)";
         }
       }
       onSaved(`${isEdit ? "상품을 수정했습니다" : "상품을 등록했습니다"}${warn}`);

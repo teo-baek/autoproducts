@@ -14,6 +14,9 @@ repo 프로토콜(라우터의 SupabaseUploadRepo / 테스트의 FakeUploadRepo 
   insert_images(rows) / list_unmatched_images(wholesaler_id)
   update_image(id, patch, wholesaler_id=None) -> dict|None
 """
+import io
+import posixpath
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 from app.services.excel_parse import parse_template_rows
@@ -21,6 +24,17 @@ from app.services.image_match import match_filename_to_product
 from app.services.image_process import process_image_bytes, thumb_path
 
 _IMG_WORKERS = 8
+
+# ZIP 흡수 설정
+_ZIP_IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+_ZIP_CONTENT_TYPE = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                     ".webp": "image/webp", ".gif": "image/gif"}
+_ZIP_MAX_IMAGES = 1000   # 초과 시 분할 업로드 안내
+# ⚠️ 운영 Cloud Run 인스턴스가 512Mi 메모리(Makefile deploy) — 아래 값은 그 한도에 맞춘 보수적 기본값.
+# 메모리를 올리면(예: 2Gi) 이 상수들도 키울 수 있다.
+_ZIP_MAX_BYTES = 100 * 1024 * 1024   # ZIP 1개 최대 100MB(더 큰 사진 묶음은 나눠서)
+_ZIP_WORKERS = 4                      # 동시 가공 수(PIL 디코드 메모리 상한 고려 — _IMG_WORKERS 보다 보수적)
+_ZIP_BATCH = 16                       # 한 번에 메모리에 올리는 이미지 수(배치 처리로 피크 메모리 제한)
 
 
 class UploadError(Exception):
@@ -31,6 +45,16 @@ class UploadForbidden(UploadError):
     """존재하지 않거나 호출자 소유가 아닌 리소스 → 404(존재 노출 방지)."""
 
 
+def _friendly_db_error(e: Exception) -> str:
+    """DB raw 예외 → 사용자 친화 한국어 사유(내부 제약명/JSON 미노출)."""
+    s = str(e)
+    if "23505" in s or "duplicate key" in s or "unique constraint" in s:
+        return "이미 등록된 품번입니다 (중복 — 건너뜀)"
+    if "23503" in s or "foreign key" in s:
+        return "참조 데이터가 올바르지 않습니다"
+    return "상품 등록 중 오류가 발생했습니다"
+
+
 def _owned_job(repo, job_id: str, caller_wid: str | None) -> dict:
     job = repo.get_upload_job(job_id)
     if not job or caller_wid is None or job.get("wholesaler_id") != caller_wid:
@@ -39,47 +63,69 @@ def _owned_job(repo, job_id: str, caller_wid: str | None) -> dict:
     return job
 
 
-def ingest_excel(repo, wholesaler_id: str, parse_path: str,
-                 created_by: str | None = None, source_label: str | None = None) -> dict:
-    """표준 엑셀 파싱 → 품번별로 상품 1개 + SKU N개 생성, upload_job 기록.
+def _group_rows(rows: list[dict]) -> list[dict]:
+    """연속된 (품번, 상품명) 블록을 한 상품으로 그룹핑.
 
-    품번별 insert 는 개별 try — UNIQUE 충돌(재업로드 등) 시 해당 품번만 error 로 떨구고 계속.
+    ⚠️ 품번은 유일키가 아니다(한 파일 안에서도 같은 품번이 다른 상품일 수 있음 — 현장 확인).
+    따라서 '품번으로 전역 그룹핑' 하지 않는다. POS 내보내기는 한 상품의 색상/사이즈 변형을
+    연속된 행으로 나열하므로, 연속된 (품번,상품명)이면 한 상품의 SKU 들로 본다.
+    같은 품번이 떨어져서 다시 나오면(또는 상품명이 바뀌면) 별개의 상품으로 분리된다.
     """
-    res = parse_template_rows(parse_path)
-
-    grouped: dict[str, dict] = {}
-    order: list[str] = []
-    for r in res.rows:
-        key = r["source_p_number"]
-        if key not in grouped:
-            # 혼용률은 상품 단위 — 그룹 첫 행 중 값이 있는 것을 채택.
-            grouped[key] = {"item_name": r["item_name"],
-                            "fabric_composition": r.get("fabric_composition"), "skus": []}
-            order.append(key)
-        elif not grouped[key].get("fabric_composition") and r.get("fabric_composition"):
-            grouped[key]["fabric_composition"] = r["fabric_composition"]
-        grouped[key]["skus"].append({
+    groups: list[dict] = []
+    prev_sig = None
+    for r in rows:
+        sig = (r["source_p_number"], r["item_name"])
+        if prev_sig is None or sig != prev_sig:
+            groups.append({"source_p_number": r["source_p_number"], "item_name": r["item_name"],
+                           "fabric_composition": r.get("fabric_composition"), "skus": []})
+            prev_sig = sig
+        g = groups[-1]
+        if not g.get("fabric_composition") and r.get("fabric_composition"):  # 혼용률은 상품 단위
+            g["fabric_composition"] = r["fabric_composition"]
+        g["skus"].append({
             "color": r["color"], "size": r["size"],
             "wholesale_price": r["wholesale_price"], "retail_price": r["retail_price"],
             "stock": r.get("stock", 0),
         })
+    return groups
+
+
+def preview_excel(parse_path: str) -> dict:
+    """드라이런 — 파싱 + 그룹핑만 하고 DB 에 아무것도 쓰지 않는다(마법사 1단계 검증용).
+
+    반환: 생성될 상품/ SKU 수 + 행 단위 오류 + 폐기 행 수. 실제 저장은 commit(ingest_excel)에서.
+    """
+    res = parse_template_rows(parse_path)
+    groups = _group_rows(res.rows)
+    return {"product_count": len(groups),
+            "sku_count": sum(len(g["skus"]) for g in groups),
+            "errors": res.errors, "dropped": res.dropped}
+
+
+def ingest_excel(repo, wholesaler_id: str, parse_path: str,
+                 created_by: str | None = None, source_label: str | None = None) -> dict:
+    """표준 엑셀 파싱 → 연속 (품번,상품명) 블록별로 상품 1개 + SKU N개 생성, upload_job 기록.
+
+    상품 단위 insert 는 개별 try — 충돌 시 해당 상품만 error 로 떨구고 계속.
+    """
+    res = parse_template_rows(parse_path)
+    groups = _group_rows(res.rows)
 
     created, insert_errors = [], []
-    for key in order:
-        g = grouped[key]
+    for g in groups:
         try:
             product = repo.insert_product({
                 "wholesaler_id": wholesaler_id,
                 "created_by": created_by,
                 "platform_code": repo.next_platform_code(),
-                "source_p_number": key,
+                "source_p_number": g["source_p_number"],
                 "item_name": g["item_name"],
                 "fabric_composition": g.get("fabric_composition"),
             })
             repo.insert_skus([{**s, "product_id": product["id"]} for s in g["skus"]])
             created.append(product)
-        except Exception as e:   # UNIQUE 충돌 등 — 품번 단위로 격리
-            insert_errors.append({"source_p_number": key, "reason": str(e)[:200]})
+        except Exception as e:   # 충돌 등 — 상품 단위로 격리, 친화 사유로 기록
+            insert_errors.append({"source_p_number": g["source_p_number"], "reason": _friendly_db_error(e)})
 
     errors = res.errors + insert_errors
     job = repo.create_upload_job({
@@ -92,14 +138,26 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
         "error_rows": len(errors),
         "error_detail": errors or None,
     })
-    return {"job": job, "products": created, "errors": errors}
+    return {"job": job, "products": created, "errors": errors, "dropped": res.dropped}
+
+
+def _thumbnail_from_bytes(repo, storage_path: str, raw: bytes) -> tuple[str | None, str]:
+    """원본 바이트 → 가공 → thumbs/ 업로드. (thumbnail_path|None, status) 반환. 예외 미전파."""
+    result = process_image_bytes(raw)
+    if result.status != "ok" or result.data is None:
+        return None, "error"
+    dst = thumb_path(storage_path)
+    try:
+        repo.upload_object(dst, result.data)
+    except Exception:
+        return None, "error"
+    return dst, "ok"
 
 
 def _process_one_image(repo, row: dict) -> str:
-    """원본 다운로드 → 가공 → thumbs/ 업로드 → row['thumbnail_path'] 기록. 이미지 단위 격리.
+    """(매니페스트 경로) 원본 다운로드 → 가공 → row['thumbnail_path'] 기록. 이미지 단위 격리.
 
     반환 상태: 'ok'(썸네일 생성) / 'none'(원본을 못 가져옴) / 'error'(다운로드는 됐으나 가공/업로드 실패).
-    실패해도 예외를 전파하지 않는다(배치 전체 보호) — thumbnail_path 는 None 으로 남고 원본 폴백.
     """
     src = row["storage_path"]
     try:
@@ -108,16 +166,10 @@ def _process_one_image(repo, row: dict) -> str:
         return "none"
     if not raw:
         return "none"
-    result = process_image_bytes(raw)
-    if result.status != "ok" or result.data is None:
-        return "error"
-    dst = thumb_path(src)
-    try:
-        repo.upload_object(dst, result.data)
-    except Exception:
-        return "error"
-    row["thumbnail_path"] = dst
-    return "ok"
+    dst, status = _thumbnail_from_bytes(repo, src, raw)
+    if dst:
+        row["thumbnail_path"] = dst
+    return status
 
 
 def attach_images(repo, job_id: str, images: list[dict],
@@ -140,7 +192,7 @@ def attach_images(repo, job_id: str, images: list[dict],
         rows.append({
             "wholesaler_id": wholesaler_id,
             "storage_path": img["storage_path"],
-            "thumbnail_path": None,
+            "thumbnail_path": img.get("thumbnail_path"),   # staging 단계에서 이미 가공됐으면 그대로 사용
             "original_filename": fname,
             "product_id": pid,
             "match_status": "matched" if pid else "unmatched",
@@ -148,13 +200,14 @@ def attach_images(repo, job_id: str, images: list[dict],
         })
         (matched if pid else unmatched).append(fname)
 
-    # 서버측 썸네일 가공(원본 다운로드→리사이즈→thumbs 업로드) — 이미지 단위 병렬 + 격리.
+    # 서버측 썸네일 가공 — 아직 썸네일이 없는 행만(원본 다운로드→리사이즈→thumbs 업로드). 이미지 단위 격리.
     processed = {"ok": 0, "none": 0, "error": 0}
-    can_process = (process and rows
+    to_process = [r for r in rows if r.get("thumbnail_path") is None]
+    can_process = (process and to_process
                    and hasattr(repo, "download_object") and hasattr(repo, "upload_object"))
     if can_process:
         with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
-            for status in ex.map(lambda r: _process_one_image(repo, r), rows):
+            for status in ex.map(lambda r: _process_one_image(repo, r), to_process):
                 processed[status] += 1
 
     inserted = repo.insert_images(rows) if rows else []
@@ -186,3 +239,91 @@ def resolve_match(repo, job_id: str, image_id: str, source_p_number: str,
     if not updated:
         raise UploadForbidden("이미지를 찾을 수 없거나 권한이 없습니다")
     return updated
+
+
+# ── ZIP 일괄 이미지 업로드 ───────────────────────────────────────────────────
+def _zip_member_name(info: "zipfile.ZipInfo") -> str:
+    """ZIP 멤버 파일명 — Windows 제작 zip 의 한글 파일명(cp437로 저장됨)을 복구."""
+    name = info.filename
+    if info.flag_bits & 0x800:        # UTF-8 플래그가 켜져 있으면 그대로
+        return name
+    try:                              # cp437 로 디코드된 바이트를 cp949(한글)로 재해석
+        return name.encode("cp437").decode("cp949")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return name
+
+
+def _zip_image_members(zf: "zipfile.ZipFile", max_images: int = _ZIP_MAX_IMAGES) -> list[tuple]:
+    """ZIP 안의 이미지 멤버만 [(ZipInfo, 파일명, content_type)] 로. 숨김/맥OS 잔재/비이미지 제외.
+
+    바이트는 아직 읽지 않는다(배치 처리에서 필요할 때만 read → 피크 메모리 제한).
+    개수가 max_images 초과면 UploadError(분할 업로드 안내).
+    """
+    out: list[tuple] = []
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        name = _zip_member_name(info)
+        if "__MACOSX" in name:                 # 맥OS 압축 잔재
+            continue
+        base = posixpath.basename(name.replace("\\", "/"))
+        if not base or base.startswith("._") or base == ".DS_Store":
+            continue
+        ext = ("." + base.rsplit(".", 1)[-1].lower()) if "." in base else ""
+        if ext not in _ZIP_IMG_EXTS:
+            continue
+        out.append((info, base, _ZIP_CONTENT_TYPE.get(ext, "application/octet-stream")))
+        if len(out) > max_images:
+            raise UploadError(
+                f"ZIP 안의 이미지가 너무 많습니다(최대 {max_images}장). 나눠서 올려주세요.")
+    return out
+
+
+def stage_zip_to_manifest(repo, wholesaler_id: str, zip_bytes: bytes) -> dict:
+    """ZIP 1개 → 안의 이미지를 Storage(staging) 에 업로드 + 썸네일 가공 후 **매니페스트만** 반환.
+
+    이 단계에선 DB(상품/이미지/잡)에 아무것도 쓰지 않는다(품번 매칭도 안 함). 매칭/기록은
+    4단계 commit 의 attach_images 에서 일괄 수행한다(상품이 그때 생기므로).
+    메모리 보호(Cloud Run 512Mi): zip 은 한 번만 메모리에 두고 _ZIP_BATCH 단위로 읽어
+    _ZIP_WORKERS 로 가공. 반환: {manifest:[{original_filename, storage_path, thumbnail_path}], processed}.
+    """
+    if len(zip_bytes) > _ZIP_MAX_BYTES:
+        raise UploadError(
+            f"ZIP 용량이 너무 큽니다(최대 {_ZIP_MAX_BYTES // (1024 * 1024)}MB). 사진을 나눠서 올려주세요.")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except zipfile.BadZipFile:
+        raise UploadError("올바른 ZIP 파일이 아닙니다.")
+
+    def _handle(payload: tuple[str, bytes, str]) -> dict:
+        base, raw, ctype = payload
+        storage_path = f"{wholesaler_id}/staging/{base}"
+        try:
+            repo.upload_object(storage_path, raw, content_type=ctype)
+        except Exception:
+            return {"status": "none", "item": None}
+        dst, status = _thumbnail_from_bytes(repo, storage_path, raw)
+        return {"status": status,
+                "item": {"original_filename": base, "storage_path": storage_path,
+                         "thumbnail_path": dst}}
+
+    results: list[dict] = []
+    with zf:
+        members = _zip_image_members(zf)
+        if not members:
+            raise UploadError("ZIP 안에 이미지 파일(JPG/PNG 등)이 없습니다.")
+        for i in range(0, len(members), _ZIP_BATCH):       # 배치 단위로만 메모리에 적재
+            batch = members[i:i + _ZIP_BATCH]
+            payloads = [(base, zf.read(info), ctype) for (info, base, ctype) in batch]
+            with ThreadPoolExecutor(max_workers=_ZIP_WORKERS) as ex:
+                results.extend(ex.map(_handle, payloads))
+
+    manifest = [r["item"] for r in results if r["item"] is not None]
+    processed = {"ok": 0, "none": 0, "error": 0}
+    for r in results:
+        processed[r["status"]] += 1
+
+    if results and not manifest:   # 전 이미지 업로드 실패 = 저장소 미준비(버킷 없음 등)
+        raise UploadError("이미지 저장소가 아직 준비되지 않았습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.")
+
+    return {"manifest": manifest, "processed": processed}

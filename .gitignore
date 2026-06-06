@@ -33,3 +33,8 @@ next-env.d.ts
 *.swo
 *~
 .*.swp
+
+# 배포 (Cloud Run) — 로컬 전용, 절대 커밋 금지
+deploy.env
+.gcloud-ezmerce/
+secrets/

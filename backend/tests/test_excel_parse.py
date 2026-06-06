@@ -75,21 +75,25 @@ def test_parse_alias_header(tmp_path):
     assert parsed.rows[0]["wholesale_price"] == 120000
 
 
-def test_parse_blank_pnum_falls_back_to_item_name(tmp_path):
-    # 품번 비었지만 상품명 있으면 상품명을 품번 대용으로 등록(데이터 손실 방지)
+def test_parse_blank_pnum_is_dropped(tmp_path):
+    # 품번 없으면 (상품명이 있어도) 행을 폐기 — 오류 아님, dropped 로 집계 (사용자 정책)
     p = _make_xlsx(tmp_path, [["", "프릴리OPS", "블랙", "F", "18000", ""]])
     parsed = parse_template_rows(str(p))
-    assert parsed.errors == []
-    assert parsed.rows[0]["source_p_number"] == "프릴리OPS"
-
-
-def test_parse_blank_pnum_and_name_excluded(tmp_path):
-    # 품번·상품명 둘 다 없으면(도매가만) 식별 불가 → 제외(오류)
-    p = _make_xlsx(tmp_path, [["", "", "블랙", "F", "18000", ""]])
-    parsed = parse_template_rows(str(p))
     assert parsed.rows == []
-    fields = {e["field"] for e in parsed.errors}
-    assert "품번" in fields and "상품명" in fields
+    assert parsed.errors == []        # 에러로 잡지 않음
+    assert parsed.dropped == 1
+
+
+def test_parse_blank_pnum_dropped_keeps_valid_rows(tmp_path):
+    # 품번 없는 행만 버리고 정상 행은 유지
+    p = _make_xlsx(tmp_path, [
+        ["1001", "셔츠", "화이트", "F", "12000", "29000"],
+        ["", "품번없음", "블랙", "F", "18000", ""],
+    ])
+    parsed = parse_template_rows(str(p))
+    assert len(parsed.rows) == 1 and parsed.rows[0]["source_p_number"] == "1001"
+    assert parsed.dropped == 1
+    assert parsed.errors == []
 
 
 def test_parse_xls_valid(tmp_path):
@@ -123,11 +127,12 @@ def test_parse_non_numeric_price_is_error(tmp_path):
     assert e["field"] == "도매가" and e["reason"] == "숫자 형식이 아닙니다"
 
 
-def test_parse_missing_required_text_reports_field(tmp_path):
-    p = _make_xlsx(tmp_path, [["", "", "블랙", "L", "10000", ""]])
+def test_parse_missing_item_name_reports_field(tmp_path):
+    # 품번은 있는데 상품명만 없으면 → 상품명 누락 오류 (품번 없는 건 폐기 처리라 별도)
+    p = _make_xlsx(tmp_path, [["1001", "", "블랙", "L", "10000", ""]])
     parsed = parse_template_rows(str(p))
     fields = {e["field"] for e in parsed.errors}
-    assert {"품번", "상품명"} <= fields                    # 누락 필드별로 보고
+    assert "상품명" in fields
 
 
 def test_parse_blank_trailing_row_skipped(tmp_path):
