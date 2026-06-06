@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.routers import admin, auth, catalog, products, public, uploads
 
@@ -11,6 +12,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception):
+    # 처리 안 된 예외의 500 은 CORSMiddleware 바깥(ServerErrorMiddleware)에서 만들어져
+    # Access-Control-Allow-Origin 헤더가 빠진다 → 브라우저엔 'CORS 오류'로 보임.
+    # 여기서 직접 ACAO 를 달아 실제 에러 메시지가 프론트에 도달하도록 한다(개발: allow_origins=*).
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"서버 오류: {str(exc)[:200]}"},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 app.include_router(auth.router)
 app.include_router(admin.router)

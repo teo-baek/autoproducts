@@ -88,6 +88,9 @@ def _run(fn):
 async def upload_excel(file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
     """표준 엑셀 업로드(multipart) → 품번별 상품 일괄생성 (FR-2.2)."""
     _guard(user)
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        # CSV/구형 .xls 는 미지원 — 깔끔한 400 으로(처리 안 된 예외 → 500 은 CORS 헤더가 빠져 'CORS 오류'로 보임)
+        raise HTTPException(400, "엑셀(.xlsx) 형식만 지원합니다. 샘플 템플릿을 .xlsx 로 저장해 올려주세요.")
     data = await file.read()
     with NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
         tmp.write(data)
@@ -95,6 +98,10 @@ async def upload_excel(file: UploadFile = File(...), user: CurrentUser = Depends
     try:
         out = ingest_excel(SupabaseUploadRepo(), user.wholesaler_id, path,
                            created_by=user.id, source_label=file.filename)
+    except HTTPException:
+        raise
+    except Exception as e:  # 파싱/DB 오류를 친화 400 으로 변환(500 → 가짜 CORS 오류 방지)
+        raise HTTPException(400, f"엑셀 처리 중 오류 — 파일 형식·내용을 확인해주세요. ({str(e)[:160]})")
     finally:
         os.unlink(path)
     return {"job_id": out["job"]["id"], "created": out["products"], "errors": out["errors"]}

@@ -84,6 +84,19 @@ def test_upload_excel_route_creates_products(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_upload_excel_rejects_non_xlsx(monkeypatch):
+    shared = FakeUploadRepo()
+    monkeypatch.setattr(up_mod, "SupabaseUploadRepo", lambda: shared)
+    app.dependency_overrides[get_current_user] = _wholesaler
+    try:
+        # CSV 등 .xlsx 아닌 파일 → 깔끔한 400 (예전엔 openpyxl 예외→500→가짜 CORS 오류)
+        res = TestClient(app).post("/uploads/excel", files={"file": ("p.csv", b"a,b,c", "text/csv")})
+        assert res.status_code == 400
+        assert "xlsx" in res.json()["detail"].lower()
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_upload_excel_requires_wholesaler(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         id="u", role="retail_seller", status="approved", seller_type="independent")
