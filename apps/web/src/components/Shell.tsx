@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
+import { LogoutDialog } from "./LogoutDialog";
 import {
   Bell,
   Book,
@@ -33,13 +34,8 @@ const NAV: NavItem[] = [
  */
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
-
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -85,7 +81,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <SideUtil icon={Help} label="고객 지원" />
           <button
             type="button"
-            onClick={logout}
+            onClick={() => setLogoutOpen(true)}
             className="flex w-full items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium text-white/55 transition hover:bg-white/5 hover:text-white/90"
           >
             <LogOut width={18} height={18} />
@@ -93,6 +89,8 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
+
+      <LogoutDialog open={logoutOpen} onClose={() => setLogoutOpen(false)} />
 
       {/* ── 메인 ── */}
       <div className="flex min-w-0 flex-1 flex-col">

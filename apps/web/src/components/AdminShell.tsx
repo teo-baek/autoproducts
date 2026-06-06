@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
+import { LogoutDialog } from "./LogoutDialog";
 import { LogOut, Settings, Users } from "./icons";
 
 type NavItem = { href: string; label: string; icon: typeof Users };
@@ -16,13 +17,8 @@ const NAV: NavItem[] = [{ href: "/admin", label: "가입 승인", icon: Users }]
  */
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
-
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -80,7 +76,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="border-t border-white/10 px-3 py-4">
           <button
             type="button"
-            onClick={logout}
+            onClick={() => setLogoutOpen(true)}
             className="flex w-full items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium text-white/55 transition hover:bg-white/5 hover:text-white/90"
           >
             <LogOut width={18} height={18} />
@@ -97,7 +93,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </span>
           <button
             type="button"
-            onClick={logout}
+            onClick={() => setLogoutOpen(true)}
             className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground lg:hidden"
           >
             <LogOut width={16} height={16} /> 로그아웃
@@ -106,6 +102,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
         <main className="flex-1 px-5 py-8 sm:px-8 lg:px-10">{children}</main>
       </div>
+
+      <LogoutDialog open={logoutOpen} onClose={() => setLogoutOpen(false)} />
     </div>
   );
 }
