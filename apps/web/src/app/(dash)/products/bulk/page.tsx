@@ -244,7 +244,7 @@ function StepFile({
         ) : (
           <>
             <div className="mt-4 font-semibold text-foreground">드래그 앤 드롭 또는 클릭하여 파일 선택</div>
-            <div className="text-sm text-muted-foreground">Excel (.xlsx) 파일을 업로드하세요.</div>
+            <div className="text-sm text-muted-foreground">Excel (.xlsx / .xls) 또는 CSV (.csv) 파일을 업로드하세요.</div>
             <span className="mt-3 rounded-full bg-subtle px-3 py-1 text-xs font-medium text-muted-foreground">
               최대 용량: 50MB
             </span>
@@ -254,7 +254,7 @@ function StepFile({
       <input
         ref={ref}
         type="file"
-        accept=".xlsx,.csv"
+        accept=".xlsx,.xls,.csv"
         className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
       />

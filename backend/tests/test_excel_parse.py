@@ -1,3 +1,4 @@
+import csv
 import openpyxl
 from app.services.excel_parse import parse_template_rows, TEMPLATE_COLUMNS
 
@@ -6,6 +7,44 @@ def _make_xlsx(tmp_path, rows):
     ws.append(TEMPLATE_COLUMNS)
     for r in rows: ws.append(r)
     p = tmp_path / "t.xlsx"; wb.save(p); return p
+
+def _make_csv(tmp_path, rows, encoding="utf-8-sig"):
+    p = tmp_path / "t.csv"
+    with open(p, "w", newline="", encoding=encoding) as f:
+        w = csv.writer(f)
+        w.writerow(TEMPLATE_COLUMNS)
+        for r in rows: w.writerow(r)
+    return p
+
+def _make_xls(tmp_path, rows):
+    import xlwt
+    wb = xlwt.Workbook(); ws = wb.add_sheet("s")
+    for j, c in enumerate(TEMPLATE_COLUMNS): ws.write(0, j, c)
+    for i, r in enumerate(rows, start=1):
+        for j, v in enumerate(r): ws.write(i, j, v)
+    p = tmp_path / "t.xls"; wb.save(str(p)); return p
+
+
+def test_parse_csv_valid(tmp_path):
+    p = _make_csv(tmp_path, [["1001", "린넨셔츠", "화이트", "F", "12000", "29000"]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["source_p_number"] == "1001"
+    assert parsed.rows[0]["wholesale_price"] == 12000
+
+def test_parse_csv_cp949_korean(tmp_path):
+    # 한글 엑셀의 ANSI(cp949) CSV 도 읽혀야 함
+    p = _make_csv(tmp_path, [["1002", "한글상품", "블랙", "L", "15000", "30000"]], encoding="cp949")
+    parsed = parse_template_rows(str(p))
+    assert parsed.rows[0]["item_name"] == "한글상품"
+
+def test_parse_xls_valid(tmp_path):
+    # 구형 엑셀(.xls) — 숫자는 float 로 들어와도 _to_int 가 보정
+    p = _make_xls(tmp_path, [["2001", "울코트", "네이비", "M", 50000, 99000]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["wholesale_price"] == 50000
+    assert parsed.rows[0]["retail_price"] == 99000
 
 def test_parse_valid_rows(tmp_path):
     p = _make_xlsx(tmp_path, [["1001","린넨셔츠","화이트","F","12000","29000"]])

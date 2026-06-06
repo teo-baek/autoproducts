@@ -88,11 +88,13 @@ def _run(fn):
 async def upload_excel(file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
     """표준 엑셀 업로드(multipart) → 품번별 상품 일괄생성 (FR-2.2)."""
     _guard(user)
-    if not (file.filename or "").lower().endswith(".xlsx"):
-        # CSV/구형 .xls 는 미지원 — 깔끔한 400 으로(처리 안 된 예외 → 500 은 CORS 헤더가 빠져 'CORS 오류'로 보임)
-        raise HTTPException(400, "엑셀(.xlsx) 형식만 지원합니다. 샘플 템플릿을 .xlsx 로 저장해 올려주세요.")
+    fn = (file.filename or "").lower()
+    ext = next((e for e in (".xlsx", ".xls", ".csv") if fn.endswith(e)), None)
+    if ext is None:
+        # 미지원 형식 — 깔끔한 400 으로(처리 안 된 예외 → 500 은 CORS 헤더가 빠져 'CORS 오류'로 보임)
+        raise HTTPException(400, "엑셀(.xlsx/.xls) 또는 CSV(.csv) 파일만 지원합니다.")
     data = await file.read()
-    with NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+    with NamedTemporaryFile(suffix=ext, delete=False) as tmp:  # 실제 확장자 유지(파서가 형식 분기)
         tmp.write(data)
         path = tmp.name
     try:

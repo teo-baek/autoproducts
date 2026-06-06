@@ -171,6 +171,9 @@ uvicorn==0.48.0
     # via ezmerce-backend
 websockets==15.0.1
     # via realtime
+xlrd==2.0.2
+    # via ezmerce-backend
+xlwt==1.3.0
 yarl==1.24.2
     # via
     #   postgrest
