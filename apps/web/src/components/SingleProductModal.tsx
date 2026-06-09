@@ -40,6 +40,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
   const [colors, setColors] = useState("");
   const [sizes, setSizes] = useState("");
   const [fabric, setFabric] = useState("");
+  const [description, setDescription] = useState("");
   const [stock, setStock] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -62,11 +63,12 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
       setColors([...new Set(editing.skus.map((s) => s.color))].join(", "));
       setSizes([...new Set(editing.skus.map((s) => s.size))].join(", "));
       setFabric(editing.fabric_composition ?? "");
+      setDescription(editing.description ?? "");
       setStock(s0?.stock != null ? String(s0.stock) : "");
       setPreview(productThumb(editing));
     } else {
       setItemName(""); setSku(""); setWholesale(""); setRetail("");
-      setColors(""); setSizes(""); setFabric(""); setStock(""); setPreview(null);
+      setColors(""); setSizes(""); setFabric(""); setDescription(""); setStock(""); setPreview(null);
     }
   }, [open, editing]);
 
@@ -94,6 +96,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
           item_name: itemName.trim(),
           category: null,
           fabric_composition: fabric.trim() || null,
+          description: description.trim() || null,
         });
         await replaceSkus(editing.id, matrix);
         productId = editing.id;
@@ -104,6 +107,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
           item_name: itemName.trim(),
           category: null,
           fabric_composition: fabric.trim() || null,
+          description: description.trim() || null,
           skus: matrix,
         });
         productId = created.id;
@@ -266,6 +270,23 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
             className="hidden"
             onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
           />
+
+          <div className="mt-6">
+            <label
+              htmlFor="product-description"
+              className="mb-2 block text-sm font-semibold text-[var(--color-text-secondary)]"
+            >
+              제품 상세 설명
+            </label>
+            <textarea
+              id="product-description"
+              rows={5}
+              placeholder="제품에 대한 추가 정보·특징·주의사항 등을 입력하세요."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full resize-y rounded-[var(--radius)] border border-border bg-subtle px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-placeholder focus:border-ink focus:ring-2 focus:ring-ink/15"
+            />
+          </div>
         </div>
       </div>
     </Dialog>
