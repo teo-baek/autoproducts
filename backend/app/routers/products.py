@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.core.auth import get_current_user
+from app.core.config import get_settings
 from app.core.rbac import require_role, require_approved
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.schemas.product import ProductCreate, SkuReplaceRequest
-from app.services.excel_export import products_xlsx_bytes
+from app.services.excel_export import build_render_xlsx, cell_image_bytes, cell_image_path
 from app.services.pricing import visible_price
 from app.services.products import register_product, soft_delete_product
 from app.services.platform_code import next_platform_code
@@ -21,7 +22,7 @@ _IMMUTABLE = {"id", "platform_code", "wholesaler_id", "created_by", "created_at"
 _SELECT = (
     "*,"
     "product_skus(id,color,size,wholesale_price,retail_price,stock,deleted_at),"
-    "product_images(id,storage_path,original_filename,is_representative,match_status,sort_order,deleted_at)"
+    "product_images(id,storage_path,thumbnail_path,original_filename,is_representative,match_status,sort_order,deleted_at)"
 )
 
 
@@ -47,6 +48,7 @@ def shape_owner_product(row: dict, wholesaler_id: str) -> dict:
                      "stock": s.get("stock", 0), **priced})
     images = sorted(
         ({"id": im["id"], "storage_path": im["storage_path"],
+          "thumbnail_path": im.get("thumbnail_path"),   # 엑셀 export 썸네일 우선용
           "original_filename": im.get("original_filename"),
           "is_representative": im.get("is_representative", False),
           "match_status": im.get("match_status")}
@@ -85,6 +87,11 @@ class SupabaseProductRepo:
 
     def insert_skus(self, rows):
         return self.sb.table("product_skus").insert(rows).execute().data
+
+    def soft_delete_product(self, product_id):
+        # 보상용(A-2): 등록 도중 SKU 삽입 실패 시 방금 만든 상품을 soft-delete(hard DELETE 금지).
+        now = datetime.now(timezone.utc).isoformat()
+        self.sb.table("products").update({"deleted_at": now}).eq("id", product_id).execute()
 
     def update_product(self, pid, patch):
         q = self.sb.table("products").update(patch).eq("id", pid)
@@ -163,14 +170,34 @@ def export_products(
     search: str | None = None,
     status: str | None = Query(default=None, pattern="^(active|archived)$"),
 ):
-    """도매 본인 상품 목록 엑셀 다운로드(SKU 단위, 관리뷰 가격)."""
+    """도매 본인 상품 목록 엑셀 다운로드(사진·QR 박은 A~L 스타일, 관리뷰=도매가+판매가).
+
+    가격은 shape_owner_product 가 이미 visible_price() 로 셰이핑(도매 본인 → 둘 다).
+    QR 은 K열(QR 링크=URL 텍스트) + L열(QR 이미지=PNG 임베드) 두 열로 출력.
+    """
     require_approved(user); require_role("wholesaler")(user)
     if not user.wholesaler_id:
         raise HTTPException(400, "no wholesaler")
     rows, _ = SupabaseProductRepo(owner_wid=user.wholesaler_id).list_products(
         limit=1000, offset=0, category=category, search=search, status=status)
     items = [shape_owner_product(r, user.wholesaler_id) for r in rows]
-    data = products_xlsx_bytes(items)
+    # 이미지가 하나라도 있을 때만 Storage 클라이언트 사용(없으면 다운로드 시도 자체를 안 함)
+    sb = get_supabase() if any(it.get("images") for it in items) else None
+    render_rows = []
+    for it in items:
+        imgs = it.get("images") or []
+        storage_path = cell_image_path(imgs[0]) if imgs else None  # 대표(정렬상 첫째) · 썸네일 우선
+        render_rows.append({
+            "source_p_number": it["source_p_number"],
+            "item_name": it["item_name"],
+            "fabric_composition": it.get("fabric_composition"),
+            "platform_code": it["platform_code"],
+            "image_bytes": cell_image_bytes(sb, storage_path) if storage_path else None,
+            "skus": [{"color": s.get("color"), "size": s.get("size"), "stock": s.get("stock"),
+                      "wholesale_price": s.get("wholesale_price"),
+                      "retail_price": s.get("retail_price")} for s in it["skus"]],
+        })
+    data = build_render_xlsx(render_rows, base_url=get_settings().public_base_url)  # K=QR 링크 텍스트, L=QR 이미지
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

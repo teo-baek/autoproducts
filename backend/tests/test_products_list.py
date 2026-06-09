@@ -143,7 +143,17 @@ def test_export_xlsx_owner(monkeypatch):
         assert "spreadsheetml" in r.headers["content-type"]
         wb = load_workbook(BytesIO(r.content))
         ws = wb.active
-        assert ws.cell(row=1, column=1).value == "품번"
-        assert ws.cell(row=2, column=7).value == 18000   # 도매가 열
+        assert ws.cell(row=1, column=1).value == "사진"   # 스타일 A~L: A열=사진
+        assert [c.value for c in ws[1]][-1] == "QR 이미지"  # 최우측 열 = QR 이미지(PNG)
+        assert ws.cell(row=2, column=2).value == "SRC-1"  # B 품번
+        assert ws.cell(row=2, column=7).value == 18000     # G 도매가
+        assert ws.cell(row=2, column=8).value == 29000     # H 판매가(관리뷰=둘 다)
+        assert ws.cell(row=2, column=10).value == "18_29"  # J P CODE (관리뷰=둘 다 보임)
+        assert ws.cell(row=2, column=1).value == "사진 없음"  # 이미지 없는 행
+        # K(QR 링크) = URL 텍스트(품번 포함)
+        qr = ws.cell(row=2, column=11).value
+        assert isinstance(qr, str) and "EZM-1" in qr
+        # L(QR 이미지) = QR PNG 임베드 → 사진 없는 행이라도 이미지 1개(QR)
+        assert len(ws._images) == 1
     finally:
         app.dependency_overrides.clear()
