@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   listJobs,
   listProducts,
@@ -19,6 +20,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { Filter, ImageIcon, Info, Save, Sort, Spinner, UploadCloud } from "@/components/icons";
 
 export default function UnmatchedPage() {
+  const router = useRouter();
   const [jobId, setJobId] = useState<string | null>(null);
   const [noJob, setNoJob] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -26,6 +28,7 @@ export default function UnmatchedPage() {
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overPid, setOverPid] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   // 잡 결정: ?job 우선, 없으면 최신 잡
@@ -43,22 +46,27 @@ export default function UnmatchedPage() {
       .catch(() => setNoJob(true));
   }, []);
 
-  const load = useCallback(async () => {
-    if (!jobId) return;
-    setLoading(true);
-    try {
-      const [prods, imgs] = await Promise.all([
-        listProducts({ limit: 50 }),
-        listUnmatched(jobId),
-      ]);
-      setProducts(prods.items);
-      setImages(imgs);
-    } catch (e) {
-      setToast(e instanceof Error ? e.message : "불러오기 실패");
-    } finally {
-      setLoading(false);
-    }
-  }, [jobId]);
+  // silent=true: 매칭 직후 재조회 — 테이블을 스피너로 비우지 않는다.
+  // (비우면 드롭 타깃 <tr> 이 언마운트돼 다음 드래그가 안 먹는다)
+  const load = useCallback(
+    async (silent = false) => {
+      if (!jobId) return;
+      if (!silent) setLoading(true);
+      try {
+        const [prods, imgs] = await Promise.all([
+          listProducts({ limit: 50 }),
+          listUnmatched(jobId),
+        ]);
+        setProducts(prods.items);
+        setImages(imgs);
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : "불러오기 실패");
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [jobId]
+  );
 
   useEffect(() => {
     load();
@@ -72,21 +80,27 @@ export default function UnmatchedPage() {
 
   async function onDropImage(p: Product) {
     setOverPid(null);
-    if (!dragId || !jobId) return;
+    if (!dragId || !jobId || committing) return;
     const imageId = dragId;
     setDragId(null);
+    setCommitting(true);
     try {
       await matchImage(jobId, imageId, p.source_p_number);
       setImages((prev) => prev.filter((im) => im.id !== imageId));
       setToast(`'${p.item_name}' 에 이미지를 매칭했습니다.`);
-      load();
+      // silent 재조회: 테이블을 비우지 않아 연속 드롭이 끊기지 않는다.
+      await load(true);
     } catch (e) {
       setToast(e instanceof Error ? e.message : "매칭 실패");
+    } finally {
+      setCommitting(false);
     }
   }
 
   const matchedCount = products.filter((p) => productThumb(p)).length;
   const score = products.length ? Math.round((matchedCount / products.length) * 100) : 0;
+  // 미매칭 상품만 노출 — 드롭 후 매칭되면(productThumb 이 URL 반환) 자동으로 목록에서 사라진다.
+  const unmatchedProducts = products.filter((p) => !productThumb(p));
 
   if (noJob) {
     return (
@@ -117,9 +131,14 @@ export default function UnmatchedPage() {
             업로드된 데이터와 이미지를 검토하고, 매칭되지 않은 이미지를 드래그 앤 드롭으로 연결하세요.
           </p>
         </div>
-        <Button onClick={() => setToast("매칭 상태가 저장되었습니다.")}>
-          <Save width={16} height={16} /> 저장
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => router.push("/products")}>
+            취소
+          </Button>
+          <Button onClick={() => setToast("매칭 상태가 저장되었습니다.")}>
+            <Save width={16} height={16} /> 저장
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
@@ -127,7 +146,7 @@ export default function UnmatchedPage() {
         <Card>
           <div className="flex items-center gap-3 border-b border-divider px-5 py-4">
             <div className="text-sm font-bold text-foreground">
-              총 {products.length}개의 상품 데이터
+              미매칭 {unmatchedProducts.length}개의 상품 데이터
             </div>
             <div className="ml-auto flex gap-2">
               <span className="flex size-9 items-center justify-center rounded-[var(--radius)] border border-border text-muted-foreground">
@@ -143,8 +162,10 @@ export default function UnmatchedPage() {
             <div className="py-20 text-center">
               <Spinner width={24} height={24} className="mx-auto text-muted-foreground" />
             </div>
-          ) : products.length === 0 ? (
-            <div className="py-20 text-center text-sm text-muted-foreground">상품이 없습니다.</div>
+          ) : unmatchedProducts.length === 0 ? (
+            <div className="py-20 text-center text-sm text-muted-foreground">
+              {products.length === 0 ? "상품이 없습니다." : "미매칭 상품이 없습니다 🎉"}
+            </div>
           ) : (
             <div className="max-h-[34rem] overflow-y-auto">
               <table className="w-full text-left text-sm">
@@ -158,7 +179,7 @@ export default function UnmatchedPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((p) => {
+                  {unmatchedProducts.map((p) => {
                     const thumb = productThumb(p);
                     const matched = !!thumb;
                     const isOver = overPid === p.id;
@@ -222,7 +243,7 @@ export default function UnmatchedPage() {
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid max-h-[34rem] grid-cols-2 gap-3 overflow-y-auto">
             {images.length === 0 ? (
               <div className="col-span-2 rounded-[var(--radius-lg)] border-2 border-dashed border-border bg-canvas py-10 text-center text-sm text-muted-foreground">
                 미연결 이미지가 없습니다 🎉
