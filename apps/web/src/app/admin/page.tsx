@@ -149,8 +149,8 @@ export default function AdminApprovalsPage() {
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{a.company_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{a.full_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{ROLE_LABEL[a.role] ?? a.role}</td>
-                      <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
-                        {a.seller_type ? (SELLER_TYPE_LABEL[a.seller_type] ?? a.seller_type) : "—"}
+                      <td className="px-5 py-3.5">
+                        <TypeCell a={a} />
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground">{fmtDate(a.created_at)}</td>
                       <td className="px-5 py-3.5 text-center">
@@ -195,4 +195,22 @@ export default function AdminApprovalsPage() {
       )}
     </div>
   );
+}
+
+/** 셀러 유형 셀 — 일반(라이브셀러) vs 에이전시 소속을 뱃지로 구분.
+ *  에이전시 소속이면 소속 에이전시명(서버 보강)도 함께. (셀러=retail_seller 외 역할은 "—") */
+function TypeCell({ a }: { a: Account }) {
+  if (a.role !== "retail_seller") return <span className="text-muted-foreground">—</span>;
+  if (a.seller_type === "agency_affiliated") {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Badge tone="grade">{SELLER_TYPE_LABEL.agency_affiliated}</Badge>
+        {a.agency_name && <span className="text-xs text-muted-foreground">{a.agency_name}</span>}
+      </div>
+    );
+  }
+  if (a.seller_type === "independent") {
+    return <Badge tone="neutral">{SELLER_TYPE_LABEL.independent}</Badge>;
+  }
+  return <span className="text-muted-foreground">—</span>;
 }

@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_key: str = ""
     supabase_jwt_secret: str = ""  # (레거시 HS256 — JWKS 검증 사용 시 불필요)
-    public_base_url: str = "http://localhost:3000"  # QR 카드 URL prefix
+    public_base_url: str = "http://localhost:3555"  # 프론트 공개 카드 prefix({base}/p?code=…). dev=프론트 포트
     platform_code_prefix: str = "EZM"
 
     @property

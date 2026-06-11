@@ -1,4 +1,8 @@
+import logging
+
 from app.schemas.product import ProductCreate
+
+log = logging.getLogger("ezmerce.products")
 
 
 def register_product(repo, wholesaler_id: str, payload: ProductCreate, created_by: str | None = None) -> dict:
@@ -17,7 +21,16 @@ def register_product(repo, wholesaler_id: str, payload: ProductCreate, created_b
     if payload.category is not None:        # 마이그레이션 _07 미적용 환경 보호 — 값 있을 때만 포함
         row["category"] = payload.category
     product = repo.insert_product(row)
-    repo.insert_skus([{**s.model_dump(), "product_id": product["id"]} for s in payload.skus])
+    try:
+        repo.insert_skus([{**s.model_dump(), "product_id": product["id"]} for s in payload.skus])
+    except Exception:
+        # 보상(A-2): product 는 생성됐는데 SKU 삽입이 실패하면 SKU 없는 빈 상품(고아)이 남는다.
+        # 방금 만든 상품을 soft-delete 해 정리(앱레벨 best-effort 원자성, hard DELETE 금지).
+        try:
+            repo.soft_delete_product(product["id"])
+        except Exception:  # noqa: BLE001 — 보상 실패해도 원래 예외를 우선 전파
+            log.warning("SKU 삽입 실패 후 고아 상품 정리 실패 product_id=%s", product.get("id"))
+        raise
     return product
 
 

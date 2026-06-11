@@ -1,12 +1,12 @@
-# 백엔드 배포 — Google Cloud Run (`make deploy`)
+# 백엔드 배포 — Google Cloud Run (`make deploy-api`)
 
 FastAPI 백엔드(`backend/`)를 컨테이너로 Cloud Run에 자동 배포한다.
-**최종 목표: 루트에서 `make deploy` 한 줄.** Supabase는 매니지드라 Cloud Run은 env + 시크릿만 있으면 된다.
+**백엔드만: `make deploy-api` / 프론트까지 한 번에: `make deploy`.** Supabase는 매니지드라 Cloud Run은 env + 시크릿만 있으면 된다.
 
 ```
 make deploy-login   # 맨 처음 1회: 전용 구글계정으로 브라우저 로그인 (키 불필요)
 make deploy-setup   # 1회: API 켜기 + 저장소 + 시크릿 + 권한
-make deploy         # 그 다음부터는 이거만 — 빌드 → 배포
+make deploy-api     # 그 다음부터 백엔드 배포 — 빌드 → Cloud Run  (둘 다면 make deploy)
 ```
 
 인증은 전용 구글계정 로그인으로 하고, gcloud 상태를 `.gcloud-ezmerce/`(프로젝트 안)에 **격리**한다.
@@ -60,7 +60,7 @@ make deploy-setup
 
 ## 배포
 ```bash
-make deploy
+make deploy-api      # 백엔드만 (프론트까지 한 번에 = make deploy)
 ```
 빌드(Cloud Build) → Cloud Run 배포까지 자동. 끝나면 서비스 URL을 출력한다.
 
@@ -100,7 +100,7 @@ docker run --rm -p 8080:8080 \
   대량이면 Cloud Tasks/Pub-Sub. 진행상태는 인메모리 금지 → DB `upload_job`.
 
 ## 문제 해결
-- `make deploy-auth`/`make deploy` 가 "인증된 계정 없음" → `make deploy-login` 먼저.
+- `make deploy-api` 가 "인증된 계정 없음" → `make deploy-login` 먼저.
 - 권한 에러(예: `PERMISSION_DENIED`): 로그인한 계정이 프로젝트 **소유자(Owner)** 또는
   (`run.admin` + `cloudbuild.builds.editor` + `artifactregistry.admin` + `secretmanager.admin`
   + `iam.serviceAccountUser` + `serviceusage.serviceUsageAdmin`) 역할이 있어야 함.

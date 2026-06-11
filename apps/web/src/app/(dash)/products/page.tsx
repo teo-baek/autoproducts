@@ -1,15 +1,16 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect -- 서버 데이터/라우트 동기화 목적의 의도된 effect */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  aggregateColors,
   aggregateSizes,
   archiveProduct,
+  colorSummary,
   deleteProduct,
   downloadProductsXlsx,
   getMe,
+  isSoldOut,
   listProducts,
   productThumb,
   repWholesale,
@@ -18,9 +19,12 @@ import {
   type Product,
 } from "@/lib/products";
 import { SingleProductModal } from "@/components/SingleProductModal";
+import { ProductDetailModal } from "@/components/ProductDetailModal";
+import { useSearch } from "@/components/SearchProvider";
 import { Badge, Button, Card, Dialog, Popover } from "@/components/ui";
 import {
   Archive,
+  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -41,18 +45,24 @@ const PAGE_SIZE = 8;
 
 export default function ProductsPage() {
   const router = useRouter();
+  const { query } = useSearch(); // 상단바 검색어(상품명·품번)
   const [wid, setWid] = useState<string>("");
-  const [items, setItems] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
+  const [allItems, setAllItems] = useState<Product[]>([]); // 전체 로드 후 클라에서 필터/정렬/페이지네이션
   const [page, setPage] = useState(0);
-  const tab = ""; // 카테고리 필터 임시 숨김(분류 기준 미정) — 항상 전체
+  // 필터/정렬(클라이언트) — 페이지네이션이 클라 슬라이스라 도매가(자식 SKU 최저가) 정렬도 정확.
+  // 필터는 단일선택 보기 모드: 전체 / 품절만 / 보관(진열 내림)만.
+  const [viewFilter, setViewFilter] = useState<"all" | "soldout" | "archived">("all");
+  const [sortKey, setSortKey] = useState<"created" | "pnum" | "name" | "price">("created");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [detail, setDetail] = useState<Product | null>(null);   // 상세(읽기) 모달 대상
   const [confirm, setConfirm] = useState<Product | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -64,35 +74,51 @@ export default function ProductsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await listProducts({
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
-        category: tab || undefined,
-      });
-      setItems(res.items);
-      setTotal(res.total);
+      const LIMIT = 100; // 백엔드 list 캡(le=100) — 전체를 페이지 루프로 모은다.
+      const acc: Product[] = [];
+      for (let off = 0; off <= 5000; off += LIMIT) {
+        // 안전 상한 5000
+        const res = await listProducts({ limit: LIMIT, offset: off });
+        acc.push(...res.items);
+        if (acc.length >= res.total || res.items.length === 0) break;
+      }
+      setAllItems(acc);
     } catch (e) {
       setError(e instanceof Error ? e.message : "상품을 불러오지 못했습니다.");
-      setItems([]);
-      setTotal(0);
+      setAllItems([]);
     } finally {
       setLoading(false);
     }
-  }, [page, tab]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    if (!toast) return;
+    // 다운로드 진행 중에는 "준비 중" 안내가 사라지지 않도록 자동 닫힘을 멈춘다.
+    if (!toast || downloading) return;
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
-  }, [toast]);
+  }, [toast, downloading]);
 
   function showToast(msg?: string) {
     if (msg) setToast(msg);
     load();
+  }
+
+  async function onDownloadXlsx() {
+    if (downloading) return;
+    setDownloading(true);
+    setToast("엑셀을 준비하고 있습니다. 잠시만 기다려 주세요…");
+    try {
+      await downloadProductsXlsx();
+      setToast("엑셀 다운로드가 시작되었습니다.");
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "다운로드 실패");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   function openCreate() {
@@ -137,7 +163,50 @@ export default function ProductsPage() {
     }
   }
 
+  // 필터 + 검색 + 정렬 적용 (클라이언트). 도매가 = SKU 최저가(repWholesale).
+  const view = useMemo(() => {
+    let arr = allItems;
+    if (viewFilter === "soldout") arr = arr.filter((p) => isSoldOut(p));
+    else if (viewFilter === "archived") arr = arr.filter((p) => p.status === "archived");
+    const q = query.trim().toLowerCase();
+    if (q)
+      arr = arr.filter(
+        (p) =>
+          (p.item_name || "").toLowerCase().includes(q) ||
+          (p.source_p_number || "").toLowerCase().includes(q)
+      );
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let c: number;
+      switch (sortKey) {
+        case "pnum":
+          c = (a.source_p_number || "").localeCompare(b.source_p_number || "", "ko", { numeric: true });
+          break;
+        case "name":
+          c = (a.item_name || "").localeCompare(b.item_name || "", "ko");
+          break;
+        case "price":
+          c = (repWholesale(a) ?? Infinity) - (repWholesale(b) ?? Infinity);
+          break;
+        default: // created — 등록일
+          c = (a.created_at || "").localeCompare(b.created_at || "");
+      }
+      return c * dir;
+    });
+  }, [allItems, viewFilter, query, sortKey, sortDir]);
+
+  const total = view.length;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageItems = view.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const filterActive = viewFilter !== "all";
+
+  // 필터/정렬 변경 시 첫 페이지로, 항목이 줄어 현재 페이지가 비면 클램프.
+  useEffect(() => {
+    setPage(0);
+  }, [viewFilter, query, sortKey, sortDir]);
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -206,12 +275,66 @@ export default function ProductsPage() {
                 <Pencil width={12} height={12} /> 관리 모드
               </Badge>
             )}
-            <IconBtn title="필터">
-              <Filter width={16} height={16} />
-            </IconBtn>
-            <IconBtn title="정렬">
-              <Sort width={16} height={16} />
-            </IconBtn>
+            <Popover
+              align="end"
+              trigger={({ toggle }) => (
+                <button
+                  type="button"
+                  title="필터"
+                  onClick={toggle}
+                  className={`relative flex size-9 items-center justify-center rounded-[var(--radius)] border transition ${
+                    filterActive
+                      ? "border-ink bg-ink text-white"
+                      : "border-border bg-surface text-muted-foreground hover:bg-subtle hover:text-foreground"
+                  }`}
+                >
+                  <Filter width={16} height={16} />
+                  {filterActive && (
+                    <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-[var(--color-warning)] ring-2 ring-surface" />
+                  )}
+                </button>
+              )}
+            >
+              {(close) => {
+                const pick = (v: typeof viewFilter) => {
+                  setViewFilter(v);
+                  close();
+                };
+                return (
+                  <div className="text-sm">
+                    <PopChoice label="전체 보기" active={viewFilter === "all"} onClick={() => pick("all")} />
+                    <PopChoice label="품절만 보기" active={viewFilter === "soldout"} onClick={() => pick("soldout")} />
+                    <PopChoice label="보관 상품만 보기" active={viewFilter === "archived"} onClick={() => pick("archived")} />
+                  </div>
+                );
+              }}
+            </Popover>
+            <Popover
+              align="end"
+              trigger={({ open, toggle }) => (
+                <IconBtn title="정렬" onClick={toggle} active={open}>
+                  <Sort width={16} height={16} />
+                </IconBtn>
+              )}
+            >
+              {(close) => {
+                const choose = (k: typeof sortKey, d: typeof sortDir) => {
+                  setSortKey(k);
+                  setSortDir(d);
+                  close();
+                };
+                return (
+                  <div className="text-sm">
+                    <PopChoice label="최신 등록순" active={sortKey === "created" && sortDir === "desc"} onClick={() => choose("created", "desc")} />
+                    <PopChoice label="품번 낮은순" active={sortKey === "pnum" && sortDir === "asc"} onClick={() => choose("pnum", "asc")} />
+                    <PopChoice label="품번 높은순" active={sortKey === "pnum" && sortDir === "desc"} onClick={() => choose("pnum", "desc")} />
+                    <PopChoice label="상품명순 (가나다)" active={sortKey === "name" && sortDir === "asc"} onClick={() => choose("name", "asc")} />
+                    <PopChoice label="도매가 낮은순" active={sortKey === "price" && sortDir === "asc"} onClick={() => choose("price", "asc")} />
+                    <PopChoice label="도매가 높은순" active={sortKey === "price" && sortDir === "desc"} onClick={() => choose("price", "desc")} />
+                  </div>
+                );
+              }}
+            </Popover>
           </div>
         </div>
 
@@ -243,20 +366,29 @@ export default function ProductsPage() {
                     {error}
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : view.length === 0 ? (
                 <tr>
                   <td colSpan={manage ? 8 : 7} className="py-20 text-center">
-                    <div className="text-sm font-semibold text-foreground">등록된 상품이 없습니다</div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {allItems.length === 0 ? "등록된 상품이 없습니다" : "조건에 맞는 상품이 없습니다"}
+                    </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      상단 “상품 업로드”로 첫 상품을 등록해 보세요.
+                      {allItems.length === 0
+                        ? "상단 “상품 업로드”로 첫 상품을 등록해 보세요."
+                        : "검색어나 필터를 조정해 보세요."}
                     </p>
                   </td>
                 </tr>
               ) : (
-                items.map((p) => {
+                pageItems.map((p) => {
                   const thumb = productThumb(p);
+                  const colors = colorSummary(p);
                   return (
-                    <tr key={p.id} className="border-b border-divider/70 last:border-0 hover:bg-canvas">
+                    <tr
+                      key={p.id}
+                      onClick={() => setDetail(p)}
+                      className="cursor-pointer border-b border-divider/70 last:border-0 hover:bg-canvas"
+                    >
                       <Td>
                         <div className="flex size-12 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-subtle text-border-strong">
                           {thumb ? (
@@ -272,11 +404,13 @@ export default function ProductsPage() {
                         <div className="flex items-center gap-2 font-semibold text-foreground">
                           {p.item_name}
                           {p.status === "archived" && <Badge tone="neutral">보관됨</Badge>}
-                          {p.is_sold_out && <Badge tone="danger">SOLD OUT</Badge>}
+                          {isSoldOut(p) && <Badge tone="danger">SOLD OUT</Badge>}
                         </div>
                         {p.category && <div className="text-xs text-muted-foreground">{p.category}</div>}
                       </Td>
-                      <Td className="text-sm text-[var(--color-text-secondary)]">{aggregateColors(p)}</Td>
+                      <Td className="text-sm text-[var(--color-text-secondary)]">
+                        <span title={colors.more ? colors.full : undefined}>{colors.text}</span>
+                      </Td>
                       <Td className="text-sm text-[var(--color-text-secondary)]">{aggregateSizes(p)}</Td>
                       <Td className="text-sm text-[var(--color-text-secondary)]">{p.fabric_composition ?? "—"}</Td>
                       <Td className="text-right font-bold tabular-nums text-foreground">
@@ -284,7 +418,8 @@ export default function ProductsPage() {
                       </Td>
                       {manage && (
                         <Td className="text-right">
-                          <div className="flex justify-end gap-1">
+                          {/* 작업 버튼 클릭은 행 클릭(상세 열기)으로 전파되지 않도록 차단 */}
+                          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                             <RowAction title="수정" onClick={() => openEdit(p)}>
                               <Pencil width={15} height={15} />
                             </RowAction>
@@ -339,17 +474,22 @@ export default function ProductsPage() {
 
       {/* 엑셀 다운로드 */}
       <div className="mt-5 flex justify-end">
-        <Button
-          variant="secondary"
-          onClick={() =>
-            downloadProductsXlsx({ category: tab || undefined }).catch((e) =>
-              setToast(e instanceof Error ? e.message : "다운로드 실패")
-            )
-          }
-        >
-          <Download width={16} height={16} /> 엑셀 다운로드
+        <Button variant="secondary" loading={downloading} onClick={onDownloadXlsx}>
+          {!downloading && <Download width={16} height={16} />}
+          {downloading ? "다운로드 준비 중…" : "엑셀 다운로드"}
         </Button>
       </div>
+
+      {/* 상세(읽기) 모달 — 클릭한 상품의 모든 SKU 표시. 수정 누르면 편집 모달로 전환 */}
+      <ProductDetailModal
+        product={detail}
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        onEdit={(p) => {
+          setDetail(null);
+          openEdit(p);
+        }}
+      />
 
       {/* 모달 */}
       {wid && (
@@ -403,14 +543,42 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-5 py-3.5 align-middle ${className}`}>{children}</td>;
 }
-function IconBtn({ children, title }: { children: React.ReactNode; title: string }) {
+function IconBtn({
+  children,
+  title,
+  onClick,
+  active,
+}: {
+  children: React.ReactNode;
+  title: string;
+  onClick?: () => void;
+  active?: boolean;
+}) {
   return (
     <button
       type="button"
       title={title}
-      className="flex size-9 items-center justify-center rounded-[var(--radius)] border border-border bg-surface text-muted-foreground transition hover:bg-subtle hover:text-foreground"
+      onClick={onClick}
+      className={`flex size-9 items-center justify-center rounded-[var(--radius)] border transition hover:bg-subtle hover:text-foreground ${
+        active
+          ? "border-ink bg-subtle text-foreground"
+          : "border-border bg-surface text-muted-foreground"
+      }`}
     >
       {children}
+    </button>
+  );
+}
+/** 필터/정렬 드롭다운의 단일 선택 행. */
+function PopChoice({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-[var(--radius)] px-3 py-2 text-left transition hover:bg-subtle"
+    >
+      <span className={`font-medium ${active ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+      {active && <Check width={14} height={14} className="text-ink" />}
     </button>
   );
 }

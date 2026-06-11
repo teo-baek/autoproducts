@@ -11,7 +11,7 @@ API_PORT := 8444
 
 help: ## 명령 목록 보기
 	@echo "ezmerce make 명령:"
-	@grep -E '^[a-zA-Z_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort \
+	@grep -hE '^[a-zA-Z_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort \
 	  | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 dev: ## 프론트(:3555) + 백엔드(:8444) 동시 실행 — Ctrl+C 로 둘 다 종료
@@ -63,12 +63,13 @@ GCP_SERVICE     := $(strip $(GCP_SERVICE))
 GCP_REPO        := $(strip $(GCP_REPO))
 SUPABASE_URL    := $(strip $(SUPABASE_URL))
 PUBLIC_BASE_URL := $(strip $(PUBLIC_BASE_URL))
+WEB_API_BASE_URL := $(strip $(WEB_API_BASE_URL))
 
 GCLOUD  := CLOUDSDK_CONFIG=$(CURDIR)/.gcloud-ezmerce gcloud
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo manual)
 IMAGE    = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(GCP_REPO)/$(GCP_SERVICE):$(GIT_SHA)
 
-.PHONY: deploy deploy-login deploy-auth deploy-setup deploy-url deploy-logs deploy-whoami
+.PHONY: deploy-api deploy-login deploy-auth deploy-setup deploy-url deploy-logs deploy-whoami
 
 deploy-login: ## 1회: 전용 구글계정으로 브라우저 로그인 (격리 gcloud, 키 불필요)
 	@test -n "$(GCP_PROJECT)" || { echo "✗ deploy.env 의 GCP_PROJECT 먼저 설정 (cp deploy.env.example deploy.env)"; exit 1; }
@@ -109,16 +110,18 @@ deploy-setup: deploy-auth ## 1회 셋업: API 켜기 + Artifact Registry + 시�
 	  for ROLE in roles/cloudbuild.builds.builder roles/artifactregistry.writer roles/logging.logWriter roles/secretmanager.secretAccessor; do \
 	    $(GCLOUD) projects add-iam-policy-binding $(GCP_PROJECT) --member="serviceAccount:$${CSA}" --role="$${ROLE}" >/dev/null; \
 	  done
-	@echo "✓ 셋업 완료 — 이제 'make deploy'"
+	@echo "✓ 셋업 완료 — 이제 'make deploy-api'(백엔드만) 또는 'make deploy'(둘 다)"
 
-deploy: deploy-auth ## ★ 빌드(Cloud Build) → Cloud Run 자동 배포
+# ⚠️ PUBLIC_BASE_URL 은 "프론트(공개 카드)" 도메인이어야 한다(deploy.env). 백엔드 자신 URL 을 넣으면
+#    QR·공개카드·엑셀 QR 링크에 API 주소가 그대로 노출되고 /p?code= 가 백엔드엔 없어 깨진다.
+deploy-api: deploy-auth ## 백엔드만: 빌드(Cloud Build) → Cloud Run 배포
 	@echo "▶ 빌드+푸시: $(IMAGE)"
 	@$(GCLOUD) builds submit $(API_DIR) --config $(API_DIR)/cloudbuild.yaml --substitutions=_IMAGE=$(IMAGE) --project=$(GCP_PROJECT)
 	@echo "▶ Cloud Run 배포: $(GCP_SERVICE) ($(GCP_REGION))"
 	@$(GCLOUD) run deploy $(GCP_SERVICE) \
 	  --image "$(IMAGE)" --region=$(GCP_REGION) --project=$(GCP_PROJECT) \
 	  --platform=managed --allow-unauthenticated --port=8080 \
-	  --cpu=1 --memory=512Mi --concurrency=40 --timeout=300 \
+	  --cpu=1 --memory=1Gi --concurrency=40 --timeout=300 \
 	  --min-instances=0 --max-instances=4 \
 	  --set-env-vars=SUPABASE_URL=$(SUPABASE_URL),PUBLIC_BASE_URL=$(PUBLIC_BASE_URL),PLATFORM_CODE_PREFIX=EZM \
 	  --set-secrets=SUPABASE_SERVICE_KEY=ezmerce-supabase-service-key:latest
@@ -129,3 +132,28 @@ deploy-url: deploy-auth ## 배포된 서비스 URL 출력
 
 deploy-logs: deploy-auth ## 최근 로그 50줄
 	@$(GCLOUD) run services logs read $(GCP_SERVICE) --region=$(GCP_REGION) --project=$(GCP_PROJECT) --limit=50
+
+# ── 프론트 배포 (make deploy-web, Firebase Hosting) ──────────────────
+# Next.js 정적 export(out/) → Firebase Hosting. firebase CLI 인증은 XDG 격리로
+# 다른 firebase 프로젝트/개인계정과 안 섞임 (.firebase-ezmerce/ 에 저장). 가이드: apps/web/DEPLOY.md
+FIREBASE := XDG_CONFIG_HOME=$(CURDIR)/.firebase-ezmerce npx --yes firebase-tools
+
+.PHONY: deploy deploy-web deploy-web-login
+
+deploy: ## ★ 한방: 백엔드(Cloud Run) + 프론트(Firebase) 둘 다 배포
+	@$(MAKE) deploy-api
+	@$(MAKE) deploy-web
+	@echo "✓ 전체 배포 완료 (백엔드 + 프론트)"
+
+deploy-web-login: ## 1회: Firebase 전용 계정 브라우저 로그인 (격리)
+	@echo "▶ 브라우저 로그인 — 이 프로젝트 전용 구글계정으로 (개인계정 아님!)"
+	@$(FIREBASE) login
+
+deploy-web: ## ★ 프론트 정적빌드 → Firebase Hosting 배포
+	@test -n "$(GCP_PROJECT)" || { echo "✗ deploy.env 의 GCP_PROJECT 미설정"; exit 1; }
+	@test -n "$(WEB_API_BASE_URL)" || { echo "✗ deploy.env 의 WEB_API_BASE_URL(백엔드 Cloud Run URL) 미설정"; exit 1; }
+	@echo "▶ 프론트 정적 빌드 (NEXT_PUBLIC_API_BASE_URL=$(WEB_API_BASE_URL))"
+	@cd $(WEB_DIR) && NEXT_PUBLIC_API_BASE_URL="$(WEB_API_BASE_URL)" npm run build
+	@echo "▶ Firebase Hosting 배포 (project=$(GCP_PROJECT))"
+	@cd $(WEB_DIR) && $(FIREBASE) deploy --only hosting --project $(GCP_PROJECT)
+	@echo "✓ 프론트 배포 완료"

@@ -3,18 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listJobs, listProducts, type Job } from "@/lib/products";
-import { Badge, Button, Card } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { Box, FileUp, ImageIcon, Spinner, Table as TableIcon } from "@/components/icons";
 
 type Stats = { total: number; archived: number; jobs: Job[] };
-
-const JOB_STATUS: Record<string, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
-  completed: { label: "완료", tone: "success" },
-  needs_matching: { label: "매칭 대기", tone: "warning" },
-  failed: { label: "실패", tone: "danger" },
-  uploaded: { label: "처리 중", tone: "info" },
-  parsing: { label: "처리 중", tone: "info" },
-};
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -110,7 +102,6 @@ export default function DashboardPage() {
                   <thead>
                     <tr className="border-b border-divider text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       <th className="px-5 py-3">파일</th>
-                      <th className="px-5 py-3 text-center">상태</th>
                       <th className="px-5 py-3 text-right">처리 행</th>
                       <th className="px-5 py-3 text-right">매칭 이미지</th>
                       <th className="px-5 py-3 text-right">오류</th>
@@ -119,14 +110,10 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {stats.jobs.map((j) => {
-                      const st = JOB_STATUS[j.status] ?? { label: j.status, tone: "neutral" as const };
                       return (
                         <tr key={j.id} className="border-b border-divider/70 last:border-0 hover:bg-canvas">
                           <td className="px-5 py-3.5 font-medium text-foreground">
                             {j.file_path ?? "(파일명 없음)"}
-                          </td>
-                          <td className="px-5 py-3.5 text-center">
-                            <Badge tone={st.tone}>{st.label}</Badge>
                           </td>
                           <td className="px-5 py-3.5 text-right tabular-nums text-[var(--color-text-secondary)]">
                             {j.total_rows}

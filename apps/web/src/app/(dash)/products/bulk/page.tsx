@@ -14,7 +14,7 @@ import {
   type ImageManifestItem,
 } from "@/lib/products";
 import { Stepper } from "@/components/Stepper";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, Dialog } from "@/components/ui";
 import {
   AlertTriangle,
   Archive,
@@ -65,6 +65,11 @@ export default function BulkPage() {
   const [committing, setCommitting] = useState(false);
   const [commitErr, setCommitErr] = useState<string | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
+
+  // '이전으로' 확인 모달 — 누르면 즉시 이동 대신 경고 후 진행(오클릭 방지).
+  // pendingBack = 확인 시 실행할 이동 콜백(없으면 모달 닫힘).
+  const [pendingBack, setPendingBack] = useState<(() => void) | null>(null);
+  const requestBack = (fn: () => void) => setPendingBack(() => fn); // setState 에 함수 저장(즉시호출 방지)
 
   useEffect(() => {
     getMe().then((me) => setWid(me.wholesaler_id ?? "")).catch(() => {});
@@ -236,7 +241,7 @@ export default function BulkPage() {
               setImgFailed(false);
               setImgErrMsg(null);
             }}
-            onBack={() => setStep(0)}
+            onBack={() => requestBack(() => setStep(0))}
             onNext={() => setStep(2)}
           />
         ) : (
@@ -246,7 +251,7 @@ export default function BulkPage() {
             bigZipMsg={bigZipMsg}
             onAdd={addImages}
             onRemove={(i) => setImages((prev) => prev.filter((_, j) => j !== i))}
-            onBack={() => setStep(0)}
+            onBack={() => requestBack(() => setStep(0))}
             onNext={() => setStep(2)}
           />
         ))}
@@ -257,7 +262,7 @@ export default function BulkPage() {
           dropped={preview?.dropped ?? 0}
           committing={committing}
           commitErr={commitErr}
-          onBack={() => setStep(1)}
+          onBack={() => requestBack(() => setStep(1))}
           onNext={goCommit}
         />
       )}
@@ -272,6 +277,35 @@ export default function BulkPage() {
           onRestart={reset}
         />
       )}
+
+      {/* '이전으로' 확인 모달 — 오클릭 방지. 확인 시 보관해 둔 이동 콜백 실행. */}
+      <Dialog
+        open={pendingBack !== null}
+        onClose={() => setPendingBack(null)}
+        size="sm"
+        icon={<AlertTriangle width={18} height={18} />}
+        title="이전 단계로 이동할까요?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingBack(null)}>
+              머무르기
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                pendingBack?.();
+                setPendingBack(null);
+              }}
+            >
+              이전으로
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          이전 단계로 돌아가면 현재 단계에서 진행한 내용이 꼬이거나 다시 작업해야 할 수 있어요. 그래도 이동하시겠어요?
+        </p>
+      </Dialog>
     </div>
   );
 }

@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>요구사항: 도매관리자 멀티테넌트 1차 재편</title>
+<style>
+  /* === DARK PREMIUM TOKENS === */
+  :root {
+    --bg-base: #0a0c12;
+    --bg-surface: rgba(255,255,255,0.045);
+    --bg-surface-hover: rgba(255,255,255,0.07);
+    --bg-elevated: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.08);
+    --border-accent: rgba(139,109,255,0.35);
+    --text-primary: #e8eaf0;
+    --text-secondary: #a8b0c0;
+    --text-muted: #7a8494;
+    --accent-purple: #8b6dff;
+    --accent-cyan: #00d4ff;
+    --accent-pink: #ff6bb5;
+    --accent-green: #3ddc84;
+    --accent-amber: #ffb347;
+    --accent-red: #ff5f5f;
+    --glow-purple: rgba(139,109,255,0.22);
+    --glow-cyan: rgba(0,212,255,0.18);
+    --radius: 14px;
+    --radius-sm: 8px;
+    --shadow-card: 0 4px 24px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3);
+    --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  }
+
+  /* === RESET & BASE === */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+  }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.7;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* === AURORA MESH BACKGROUND === */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(139,109,255,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 60% at 80% 110%, rgba(0,212,255,0.08) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(255,107,181,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Animated aurora orbs */
+  .aurora-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .aurora-orb.a1 {
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, #8b6dff 0%, transparent 70%);
+    top: -200px; left: -100px;
+    animation-duration: 20s;
+  }
+  .aurora-orb.a2 {
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, #00d4ff 0%, transparent 70%);
+    bottom: -200px; right: -100px;
+    animation-duration: 24s;
+    animation-delay: -8s;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(40px, -30px) scale(1.08); }
+    100% { transform: translate(-20px, 20px) scale(0.96); }
+  }
+
+  /* === LAYOUT === */
+  .layout {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* === STICKY TOC SIDEBAR === */
+  .toc-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 32px 16px 32px 24px;
+    border-right: 1px solid var(--border);
+    background: rgba(10,12,18,0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,109,255,0.3) transparent;
+  }
+  .toc-sidebar::-webkit-scrollbar { width: 4px; }
+  .toc-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .toc-sidebar::-webkit-scrollbar-thumb { background: rgba(139,109,255,0.3); border-radius: 4px; }
+
+  .toc-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .toc-nav {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .toc-nav a {
+    display: block;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid transparent;
+    transition: all 0.18s ease;
+    line-height: 1.4;
+  }
+  .toc-nav a:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface-hover);
+    border-left-color: var(--accent-purple);
+    padding-left: 14px;
+  }
+  .toc-nav a.active {
+    color: var(--accent-purple);
+    background: rgba(139,109,255,0.09);
+    border-left-color: var(--accent-purple);
+    font-weight: 600;
+    padding-left: 14px;
+  }
+  .toc-nav .toc-sub {
+    padding-left: 20px;
+    font-size: 12px;
+  }
+
+  /* === MAIN CONTENT === */
+  .main-content {
+    flex: 1;
+    min-width: 0;
+    padding: 0 48px 80px 48px;
+    max-width: 960px;
+  }
+
+  /* === HERO === */
+  .hero {
+    padding: 64px 0 48px;
+    position: relative;
+  }
+
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 100px;
+    padding: 4px 14px;
+    margin-bottom: 24px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.7); }
+  }
+
+  .hero h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #e8eaf0 30%, #8b6dff 70%, #00d4ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 20px;
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  .meta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+  }
+
+  /* === CALLOUT BOX (PRD notice) === */
+  .callout {
+    background: rgba(255,179,71,0.07);
+    border: 1px solid rgba(255,179,71,0.25);
+    border-left: 3px solid var(--accent-amber);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    margin-bottom: 40px;
+  }
+  .callout strong { color: var(--accent-amber); }
+  .callout a {
+    color: var(--accent-cyan);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* === SECTION HEADERS === */
+  .section-h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    padding-top: 56px;
+  }
+  .section-h2::before {
+    content: attr(data-number);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .section-h3 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--accent-purple);
+    margin: 28px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-h3::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(139,109,255,0.3) 0%, transparent 100%);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+  }
+
+  /* === GLASS CARD === */
+  .glass-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .glass-card:hover {
+    border-color: rgba(139,109,255,0.2);
+    box-shadow: 0 4px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,109,255,0.08);
+  }
+
+  /* === AS-IS CARD === */
+  .asis-grid {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .asis-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: rgba(255,95,95,0.05);
+    border: 1px solid rgba(255,95,95,0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .asis-item::before {
+    content: '⚠';
+    font-size: 14px;
+    color: var(--accent-red);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .asis-item strong { color: var(--text-primary); }
+
+  /* === PURPOSE BOX === */
+  .purpose-box {
+    background: rgba(139,109,255,0.06);
+    border: 1px solid rgba(139,109,255,0.2);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin-bottom: 16px;
+  }
+  .purpose-box p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.75;
+  }
+  .purpose-box p + p { margin-top: 10px; }
+  .purpose-box strong { color: var(--text-primary); }
+
+  /* === USER STORY CARDS === */
+  .story-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .story-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  }
+  .story-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--border-accent);
+  }
+  .story-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 100px;
+    margin-bottom: 12px;
+  }
+  .story-role.admin {
+    color: #8b6dff;
+    background: rgba(139,109,255,0.12);
+    border: 1px solid rgba(139,109,255,0.25);
+  }
+  .story-role.wholesaler {
+    color: #00d4ff;
+    background: rgba(0,212,255,0.10);
+    border: 1px solid rgba(0,212,255,0.22);
+  }
+  .story-role.seller {
+    color: #3ddc84;
+    background: rgba(61,220,132,0.10);
+    border: 1px solid rgba(61,220,132,0.22);
+  }
+  .story-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+  }
+  .story-text strong { color: var(--text-primary); }
+
+  /* === FR CARDS === */
+  .fr-list {
+    display: grid;
+    gap: 14px;
+  }
+  .fr-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    align-items: start;
+    transition: border-color 0.18s, box-shadow 0.18s;
+  }
+  .fr-item:hover {
+    border-color: rgba(139,109,255,0.22);
+    box-shadow: 0 2px 16px rgba(0,0,0,0.35);
+  }
+  .fr-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 26px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    border-radius: 6px;
+    background: linear-gradient(135deg, rgba(139,109,255,0.2), rgba(0,212,255,0.15));
+    border: 1px solid rgba(139,109,255,0.3);
+    color: #c5b8ff;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .fr-text {
+    font-size: 14.5px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .fr-text strong { color: var(--text-primary); }
+
+  /* Special FR highlight */
+  .fr-item.highlight {
+    border-color: rgba(139,109,255,0.3);
+    background: rgba(139,109,255,0.06);
+  }
+  .fr-item.highlight .fr-badge {
+    background: linear-gradient(135deg, rgba(139,109,255,0.4), rgba(0,212,255,0.25));
+    border-color: rgba(139,109,255,0.5);
+    color: #d4caff;
+  }
+
+  /* === NFR CARDS === */
+  .nfr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .nfr-item {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    transition: transform 0.18s, border-color 0.18s;
+  }
+  .nfr-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(0,212,255,0.2);
+  }
+  .nfr-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .nfr-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 24px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 6px;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.25);
+    color: #60e8ff;
+    flex-shrink: 0;
+  }
+  .nfr-item.core .nfr-badge {
+    background: rgba(255,107,181,0.12);
+    border-color: rgba(255,107,181,0.3);
+    color: #ffb8df;
+  }
+  .nfr-item.core {
+    border-color: rgba(255,107,181,0.2);
+    background: rgba(255,107,181,0.04);
+  }
+  .nfr-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .nfr-text {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.68;
+  }
+  .nfr-text strong { color: var(--text-primary); }
+
+  /* === OUT OF SCOPE === */
+  .oos-list {
+    display: grid;
+    gap: 10px;
+  }
+  .oos-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: rgba(122,132,148,0.06);
+    border: 1px solid rgba(122,132,148,0.14);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    text-decoration: line-through;
+    text-decoration-color: rgba(122,132,148,0.4);
+  }
+  .oos-item::before {
+    content: '✕';
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    text-decoration: none;
+    margin-top: 1px;
+  }
+  .oos-item strong { text-decoration: none; color: var(--text-secondary); }
+  .oos-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-style: italic;
+  }
+
+  /* === AC CHECKLIST === */
+  .ac-list {
+    display: grid;
+    gap: 12px;
+  }
+  .ac-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0 14px;
+    align-items: start;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    transition: border-color 0.18s, background 0.18s;
+  }
+  .ac-item:hover {
+    background: var(--bg-surface-hover);
+    border-color: rgba(61,220,132,0.2);
+  }
+  .ac-id-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    height: 24px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 6px;
+    background: rgba(61,220,132,0.1);
+    border: 1px solid rgba(61,220,132,0.25);
+    color: #7affb8;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .ac-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.68;
+  }
+  .ac-text strong { color: var(--text-primary); }
+  .ac-yesno {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: rgba(122,132,148,0.1);
+    border: 1px solid rgba(122,132,148,0.18);
+    border-radius: 100px;
+    padding: 2px 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .ac-item.forward-compat .ac-id-badge {
+    background: rgba(255,179,71,0.12);
+    border-color: rgba(255,179,71,0.28);
+    color: #ffd580;
+  }
+  .ac-item.forward-compat {
+    border-color: rgba(255,179,71,0.15);
+  }
+
+  /* === FOOTER === */
+  .page-footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .footer-link {
+    color: var(--accent-purple);
+    text-decoration: none;
+  }
+
+  /* === ANCHOR HIGHLIGHT === */
+  :target {
+    scroll-margin-top: 24px;
+  }
+  :target > .section-h2, :target .fr-badge, :target .ac-id-badge {
+    animation: highlight-flash 1.2s ease-out;
+  }
+  @keyframes highlight-flash {
+    0% { box-shadow: 0 0 0 4px rgba(139,109,255,0.45); }
+    100% { box-shadow: none; }
+  }
+
+  /* === SCROLL FADE-IN === */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* === PARAGRAPH STYLING === */
+  p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.75;
+    margin-bottom: 10px;
+  }
+  p strong { color: var(--text-primary); }
+
+  /* === LIGHT MODE (opt-in) === */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-base: #f5f6fa;
+      --bg-surface: rgba(0,0,0,0.04);
+      --bg-surface-hover: rgba(0,0,0,0.07);
+      --bg-elevated: rgba(0,0,0,0.05);
+      --border: rgba(0,0,0,0.1);
+      --border-accent: rgba(100,80,220,0.35);
+      --text-primary: #1a1d2e;
+      --text-secondary: #3a3d52;
+      --text-muted: #7a7e99;
+      --accent-purple: #6c52d9;
+      --accent-cyan: #0095cc;
+      --glow-purple: rgba(108,82,217,0.18);
+    }
+    body::before { opacity: 0.4; }
+    .aurora-orb { opacity: 0.06; }
+    .toc-sidebar { background: rgba(245,246,250,0.92); }
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 900px) {
+    .toc-sidebar { display: none; }
+    .main-content { padding: 0 24px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="aurora-orb a1"></div>
+<div class="aurora-orb a2"></div>
+
+<div class="layout">
+
+  <!-- ===== TOC SIDEBAR ===== -->
+  <nav class="toc-sidebar" aria-label="목차">
+    <div class="toc-label">목차</div>
+    <ul class="toc-nav">
+      <li><a href="#hero">개요</a></li>
+      <li><a href="#s1">1. 배경/목적</a></li>
+      <li><a href="#s2">2. 사용자 스토리</a></li>
+      <li><a href="#s3">3. 기능 요구사항 (FR)</a></li>
+      <li><a href="#s4">4. 비기능 요구사항 (NFR)</a></li>
+      <li><a href="#s5">5. 범위 밖</a></li>
+      <li><a href="#s6">6. 수용 기준 (AC)</a></li>
+    </ul>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+
+    <!-- HERO -->
+    <section class="hero fade-in" id="hero">
+      <div class="hero-eyebrow">PRD · 1차 재편</div>
+      <h1>요구사항: 도매관리자 멀티테넌트 1차 재편</h1>
+      <div class="hero-meta">
+        <span class="meta-badge">📄 PRD — 기획 단계 요구사항</span>
+        <span class="meta-badge">🏗 FR-8 · NFR-4 · AC-7</span>
+        <span class="meta-badge">🗂 wholesale-manager-tenancy</span>
+      </div>
+    </section>
+
+    <!-- CALLOUT: PRD notice -->
+    <div class="callout fade-in">
+      <strong>다음 단계 안내</strong>: 이 문서는 PRD (기획 단계 요구사항만) 입니다. 다음 단계로 <code>tech-design</code> skill (<code>/tech-design</code>) 을 호출해 <code>wholesale-manager-tenancy-tech-design.md</code> (기술 설계서 — 테이블/컬럼/마이그레이션/RLS·앱레이어 스코프 등) 를 만드세요. 구체적 기술 결정은 여기 넣지 않습니다.<br><br>
+      <strong>입력 개념문서</strong>: <a href="../../wholesale-manager-hierarchy.md"><code>docs/wholesale-manager-hierarchy.md</code></a> (사장님 2026-06-09 브리핑 동결본). 본 PRD 는 그 §6-1 "1차 개발 후보" 를 실제 코드 현황에 맞춰 확정한 결과다.
+    </div>
+
+    <!-- ===== SECTION 1: 배경/목적 ===== -->
+    <section id="s1" class="fade-in">
+      <h2 class="section-h2" data-number="1">배경/목적</h2>
+
+      <h3 class="section-h3">현재 상태 (as-is, 코드 확인됨)</h3>
+      <div class="asis-grid">
+        <div class="asis-item">계정 역할: <strong>admin</strong> / <strong>wholesaler</strong> / <strong>retail_seller</strong>(independent|agency_affiliated) / <strong>agency</strong>.</div>
+        <div class="asis-item"><strong>admin 은 글로벌 단일</strong> — 테넌트(상위 조직) 개념이 코드에 전혀 없음. <strong>admin</strong> 1명이 모든 가입을 승인·관리.</div>
+        <div class="asis-item"><strong>카탈로그(<code>GET /catalog</code>)·공개카드(<code>GET /p/{code}</code>) 는 활성 상품 전체를 무차별 반환</strong> — 조직/테넌트 스코프 필터 없음.</div>
+        <div class="asis-item"><code>/admin</code> 화면 = <strong>가입 승인만</strong> 함. 도매업체용 백오피스(<code>(dash)</code> 그룹)는 자기 상품 관점.</div>
+        <div class="asis-item">이미 존재하는 기반: <code>wholesalers</code> 테이블, <code>products.wholesaler_id</code>, <code>profiles.wholesaler_id</code>/<code>agency_id</code>, 역할별 가격 셰이핑 <code>visible_price()</code>.</div>
+      </div>
+
+      <h3 class="section-h3">목적</h3>
+      <div class="purpose-box">
+        <p>도소매 카탈로그를 <strong>멀티테넌트 피라미드</strong>(도매관리자 → 도매상 → 셀러)로 재편한다.</p>
+        <p><strong>1차 = 도매관리자(테넌트) 1개 = LALAS.</strong> 도매상은 관리자 하나에만 소속(1:n).</p>
+        <p><strong>핵심 제약</strong>: 지금은 LALAS 하나뿐이라도, <strong>DB·쿼리는 "도매관리자(테넌트)가 여러 개로 늘어나도 스키마를 갈아엎지 않게" 미리 설계</strong>한다. (SaaS 타깃 = LALAS 처럼 운영하는 에이전시들이 각자 하나의 테넌트가 되는 것.)</p>
+        <p>가시적 핵심 = <code>/admin</code> 을 <strong>도매관리자 대시보드</strong>로 승격하고, 기존 도매 화면을 <strong>단일 도매업체 대시보드</strong>로 분리.</p>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 2: 사용자 스토리 ===== -->
+    <section id="s2" class="fade-in">
+      <h2 class="section-h2" data-number="2">사용자 스토리 / 시나리오</h2>
+
+      <div class="story-grid">
+        <div class="story-card">
+          <div class="story-role admin">도매관리자 (LALAS 대표, admin)</div>
+          <div class="story-text">도매·셀러가 가입하면 <strong>내 테넌트의 승인 목록</strong>에 떠서 승인/거절한다. <strong>소속 도매상 전체의 상품을 한 화면(합산 리스트)</strong>에서 보며, 각 행이 어느 도매 것인지 안다.</div>
+        </div>
+        <div class="story-card">
+          <div class="story-role wholesaler">도매업체 (wholesaler)</div>
+          <div class="story-text">기존처럼 <strong>내 상품만</strong> 등록·관리한다(단일 도매업체 화면). 자기 화면에 다른 도매 상품이 섞이지 않는다.</div>
+        </div>
+        <div class="story-card">
+          <div class="story-role seller">셀러 (retail_seller)</div>
+          <div class="story-text">내가 연계된 도매관리자(LALAS) 밑 <strong>모든 도매상의 상품</strong>을 카탈로그·공개카드에서 본다. 가격은 역할 규칙대로(일반 셀러=도매가 / 에이전시 소속 셀러=미노출).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 3: 기능 요구사항 ===== -->
+    <section id="s3" class="fade-in">
+      <h2 class="section-h2" data-number="3">기능 요구사항 (FR)</h2>
+
+      <div class="fr-list">
+        <div class="fr-item highlight" id="FR-1">
+          <span class="fr-badge">FR-1</span>
+          <div class="fr-text"><strong>테넌트(도매관리자) 도입 + LALAS 시드</strong>: 도매관리자(테넌트)를 별도 개념(entity)으로 도입하고, 최초 1행 = LALAS 를 시드한다.</div>
+        </div>
+        <div class="fr-item highlight" id="FR-2">
+          <span class="fr-badge">FR-2</span>
+          <div class="fr-text"><strong>도매업체 ↔ 도매관리자 소속</strong>: 각 도매업체가 어느 도매관리자에 소속되는지 연결한다. 1차 동작은 1:n(도매업체 1개 = 관리자 1개). <strong>단, 단일 칸(<code>manager_id</code>) 으로 영구 못박지 않고 연결표 형태로</strong> 둔다(먼 미래 n:m 대비, <a href="#NFR-2">NFR-2</a>).</div>
+        </div>
+        <div class="fr-item" id="FR-3">
+          <span class="fr-badge">FR-3</span>
+          <div class="fr-text"><strong>셀러 ↔ 도매관리자 연계</strong>: 각 셀러가 어느 도매관리자에 연계되는지 둔다(1차 기본: 셀러 1명 = 관리자 1개).</div>
+        </div>
+        <div class="fr-item highlight" id="FR-4">
+          <span class="fr-badge">FR-4</span>
+          <div class="fr-text"><strong>카탈로그/공개카드 테넌트 스코핑</strong>: <code>GET /catalog</code> · <code>GET /p/{code}</code>(로그인 셀러 응답) 가 <strong>"요청 셀러가 연계된 도매관리자에 소속된 도매상들의 상품"</strong> 만 반환한다. (1차엔 모두 LALAS 라 결과 집합은 현재와 같지만, 둘째 관리자가 생기면 자동으로 분리된다.)</div>
+        </div>
+        <div class="fr-item highlight" id="FR-5">
+          <span class="fr-badge">FR-5</span>
+          <div class="fr-text"><strong>도매관리자 대시보드</strong>: <code>/admin</code> 을 도매관리자 대시보드로 재편한다. (a) 가입 승인 목록(기존 기능 유지·이관), (b) <strong>상품관리 탭 신규</strong> — 소속 도매 <strong>전체 합산</strong> 리스트, <strong>행마다 도매 출처 표시</strong>. 형식은 단일 도매업체 상품관리와 동일.</div>
+        </div>
+        <div class="fr-item" id="FR-6">
+          <span class="fr-badge">FR-6</span>
+          <div class="fr-text"><strong>단일 도매업체 대시보드 분리</strong>: 기존 도매 백오피스(<code>(dash)</code>: 상품관리/등록/엑셀)를 <strong>한 도매업체 관점</strong>으로 유지·분리한다. 도매업체 사용자는 자기 상품만 본다.</div>
+        </div>
+        <div class="fr-item" id="FR-7">
+          <span class="fr-badge">FR-7</span>
+          <div class="fr-text"><strong>승인 흐름의 테넌트 단위 재정의</strong>: 가입 승인을 도매관리자(테넌트) 단위로 재정의한다. <code>admin</code> 권한은 <strong>자기 테넌트의 도매·셀러만</strong> 승인/관리한다. (1차엔 테넌트가 LALAS 하나라 LALAS <code>admin</code> 이 전부 관리하지만, 권한 판정은 테넌트 기준으로 작성한다.)</div>
+        </div>
+        <div class="fr-item" id="FR-8">
+          <span class="fr-badge">FR-8</span>
+          <div class="fr-text"><strong>가격 규칙 불변</strong>: 가격 노출은 기존 <code>visible_price()</code> 규칙(역할/<code>seller_type</code>/<code>price_visibility</code>)을 <strong>그대로 유지</strong>한다. 본 재편으로 가격 셰이핑 로직을 바꾸지 않는다.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 4: 비기능 요구사항 ===== -->
+    <section id="s4" class="fade-in">
+      <h2 class="section-h2" data-number="4">비기능 요구사항 (NFR)</h2>
+
+      <div class="nfr-grid">
+        <div class="nfr-item core" id="NFR-1">
+          <div class="nfr-header">
+            <span class="nfr-badge">NFR-1</span>
+            <span class="nfr-title">멀티테넌트 forward-compat (핵심)</span>
+          </div>
+          <div class="nfr-text">데이터 모델과 모든 테넌트-스코프 조회를 <strong>"도매관리자(테넌트)가 N개여도 스키마 변경 없이 동작"</strong> 하도록 작성한다. 1차엔 LALAS 1개만 존재한다. <strong>검증 기준</strong>: 테넌트 1행 + 도매상 소속 1행을 추가하면, 스키마/코드 변경 없이 카탈로그가 테넌트별로 분리된다.</div>
+        </div>
+        <div class="nfr-item" id="NFR-2">
+          <div class="nfr-header">
+            <span class="nfr-badge">NFR-2</span>
+            <span class="nfr-title">도매업체↔관리자 n:m forward-compat (부차)</span>
+          </div>
+          <div class="nfr-text">도매업체↔도매관리자 소속을 <strong>단일 FK 컬럼으로 영구 고정하지 않고</strong>, 연결표(<code>manager_wholesalers</code> 류)로 진화 가능한 형태로 둔다(개념문서 §5·§6-2). 1차엔 1:n 로만 운용한다.</div>
+        </div>
+        <div class="nfr-item" id="NFR-3">
+          <div class="nfr-header">
+            <span class="nfr-badge">NFR-3</span>
+            <span class="nfr-title">격리 방식</span>
+          </div>
+          <div class="nfr-text">멀티테넌트 격리는 1차엔 <strong>앱레이어 스코프 가드</strong>로 한다(현 Supabase service-key 구조와 일관). RLS 기반 격리 전환은 범위 밖.</div>
+        </div>
+        <div class="nfr-item" id="NFR-4">
+          <div class="nfr-header">
+            <span class="nfr-badge">NFR-4</span>
+            <span class="nfr-title">기존 DB/프로젝트 규칙 준수</span>
+          </div>
+          <div class="nfr-text">soft-delete(<code>deleted_at IS NULL</code> 필터), 다단계 쓰기 시 보상(compensation), 가격 출력 경로는 항상 <code>visible_price()</code> 통과 등 <code>CLAUDE.md</code> 규칙을 그대로 따른다.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 5: 범위 밖 ===== -->
+    <section id="s5" class="fade-in">
+      <h2 class="section-h2" data-number="5">범위 밖 (Out of Scope) — 전부 "먼 미래"</h2>
+      <p style="margin-bottom: 20px;">대화·개념문서에서 명시된 제외 항목:</p>
+
+      <div class="oos-list">
+        <div class="oos-item">
+          <strong>한 도매업체가 여러 도매관리자에 동시 소속/연결되는 실제 n:m 운영</strong>&nbsp;<span class="oos-note">(DB 형태만 대비 — NFR-2). 실제 다중 소속 운용은 미구현.</span>
+        </div>
+        <div class="oos-item">
+          <strong>둘째 이상 실제 도매관리자 테넌트의 온보딩·전환 UI</strong>&nbsp;<span class="oos-note">(테넌트 스위처 등). 1차엔 LALAS 고정.</span>
+        </div>
+        <div class="oos-item">
+          <strong>셀러별 도매 제한 가시성</strong>&nbsp;<span class="oos-note">(예: 셀러1은 A·B만, C는 못 봄).</span>
+        </div>
+        <div class="oos-item">
+          <strong>에이전시 실운영</strong>&nbsp;<span class="oos-note">— 에이전시가 자기 소속 셀러를 직접 관리(조직 위임 관리). 기존 <code>agency</code> 역할/테이블은 <strong>1차에 건드리지 않고 forward-compat 로 유지</strong>하며, 새 도매관리자(테넌트)는 별개 개념으로 둔다.</span>
+        </div>
+        <div class="oos-item">
+          <strong>수익화/스케일</strong>&nbsp;<span class="oos-note">— 도매관리자·도매업체 구독료, 셀러 거래 수수료, 셀러 직접 과금.</span>
+        </div>
+        <div class="oos-item">
+          <strong>RLS 기반 격리 전환</strong>&nbsp;<span class="oos-note">(NFR-3 참조).</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 6: 수용 기준 ===== -->
+    <section id="s6" class="fade-in">
+      <h2 class="section-h2" data-number="6">수용 기준 (Acceptance Criteria)</h2>
+
+      <div class="ac-list">
+        <div class="ac-item" id="AC-1">
+          <span class="ac-id-badge">AC-1</span>
+          <div class="ac-text">도매관리자(테넌트) 개념이 존재하고 <strong>LALAS 가 최초 테넌트로 시드</strong>돼 있다.</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+        <div class="ac-item forward-compat" id="AC-2">
+          <span class="ac-id-badge">AC-2</span>
+          <div class="ac-text">각 도매업체가 LALAS 테넌트에 소속돼 있고, 소속 관계가 단일 칸이 아니라 <strong>연결표 형태</strong>로 저장된다(같은 도매업체에 둘째 관리자 행을 추가해도 스키마 변경 불필요).</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+        <div class="ac-item" id="AC-3">
+          <span class="ac-id-badge">AC-3</span>
+          <div class="ac-text">셀러가 도매관리자에 연계돼 있고, <code>GET /catalog</code>·공개카드(로그인 셀러)가 <strong>"연계된 도매관리자에 소속된 도매상들의 상품"</strong> 으로 스코프된다. 1차엔 LALAS 단일이라 기존과 동일 집합을 반환한다.</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+        <div class="ac-item" id="AC-4">
+          <span class="ac-id-badge">AC-4</span>
+          <div class="ac-text"><code>/admin</code> 도매관리자 대시보드에서 <strong>가입 승인</strong>과 <strong>소속 도매 전체 합산 상품 리스트(행마다 도매 출처 표시)</strong> 둘 다 가능하다.</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+        <div class="ac-item" id="AC-5">
+          <span class="ac-id-badge">AC-5</span>
+          <div class="ac-text">도매업체 사용자의 단일 도매업체 화면에는 <strong>자기 상품만</strong> 보인다(다른 도매 상품 미혼입).</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+        <div class="ac-item" id="AC-6">
+          <span class="ac-id-badge">AC-6</span>
+          <div class="ac-text">가격 노출 결과가 재편 전과 동일하다 — 일반 셀러=도매가, 에이전시 소속 셀러=미노출, admin·도매 본인=관리뷰.</div>
+          <span class="ac-yesno">Yes / No, 기존 테스트 통과로 확인</span>
+        </div>
+        <div class="ac-item forward-compat" id="AC-7">
+          <span class="ac-id-badge">AC-7</span>
+          <div class="ac-text"><strong>(forward-compat 데모)</strong>: 테넌트 2행 + 도매상 소속을 수동으로 추가했을 때, <strong>코드/스키마 수정 없이</strong> 두 테넌트의 셀러가 서로 다른 상품 집합을 본다.</div>
+          <span class="ac-yesno">Yes / No</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="page-footer fade-in">
+      <span>변경이력은 <a class="footer-link" href="wholesale-manager-tenancy-requirements.md">.md 원본 참조</a></span>
+      <span>wholesale-manager-tenancy-requirements · PRD</span>
+    </footer>
+
+  </main><!-- /main-content -->
+</div><!-- /layout -->
+
+<script>
+  // === SCROLL-SPY + FADE-IN ===
+  (function() {
+    // Fade-in on scroll
+    var fadeEls = document.querySelectorAll('.fade-in');
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+    fadeEls.forEach(function(el) { io.observe(el); });
+
+    // Immediately show items already in viewport
+    fadeEls.forEach(function(el) {
+      var rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight) {
+        el.classList.add('visible');
+      }
+    });
+
+    // TOC scroll spy
+    var sections = document.querySelectorAll('section[id], .hero[id]');
+    var tocLinks = document.querySelectorAll('.toc-nav a');
+    var spyIO = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          var id = e.target.getAttribute('id');
+          tocLinks.forEach(function(link) {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { threshold: 0.25, rootMargin: '-20% 0px -60% 0px' });
+    sections.forEach(function(s) { spyIO.observe(s); });
+  })();
+</script>
+
+</body>
+</html>

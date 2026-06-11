@@ -231,7 +231,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
         </div>
 
         {/* 우: 이미지 */}
-        <div>
+        <div className="flex flex-col">
           <SectionTitle>상품 이미지</SectionTitle>
           <button
             type="button"
@@ -271,7 +271,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
             onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
           />
 
-          <div className="mt-6">
+          <div className="mt-6 flex flex-1 flex-col pb-1">
             <label
               htmlFor="product-description"
               className="mb-2 block text-sm font-semibold text-[var(--color-text-secondary)]"
@@ -280,11 +280,11 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
             </label>
             <textarea
               id="product-description"
-              rows={5}
+              rows={6}
               placeholder="제품에 대한 추가 정보·특징·주의사항 등을 입력하세요."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full resize-y rounded-[var(--radius)] border border-border bg-subtle px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-placeholder focus:border-ink focus:ring-2 focus:ring-ink/15"
+              className="min-h-[11rem] w-full flex-1 resize-y rounded-[var(--radius)] border border-border bg-subtle px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-placeholder focus:border-ink focus:ring-2 focus:ring-ink/15"
             />
           </div>
         </div>

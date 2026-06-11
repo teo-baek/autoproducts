@@ -27,6 +27,11 @@ class SupabaseAuthRepo:
         )
         return {"id": res.user.id}
 
+    def delete_auth_user(self, user_id: str) -> None:
+        # 보상용(A-1): profiles 시드 실패 시 방금 만든 GoTrue 계정을 하드 삭제(고아 방지).
+        # auth.users 는 GoTrue 관리 테이블이라 soft-delete(deleted_at) 대상이 아님.
+        self.sb.auth.admin.delete_user(user_id)
+
     def insert_profile(self, d: dict) -> dict:
         return self.sb.table("profiles").insert(d).execute().data[0]
 

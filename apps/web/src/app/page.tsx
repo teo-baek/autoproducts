@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getMe } from "@/lib/products";
 import { Spinner } from "@/components/icons";
 
-/** 루트 진입 — 세션 없으면 /login, 있으면 역할별 홈(관리자→/customers, 그 외→/products). */
+/** 루트 진입 — 세션 없으면 /login, 있으면 역할별 홈(관리자→/admin, 셀러→/seller/showroom, 그 외→/products). */
 export default function Home() {
   const router = useRouter();
   useEffect(() => {
@@ -17,7 +17,13 @@ export default function Home() {
       }
       try {
         const me = await getMe();
-        router.replace(me.role === "admin" ? "/admin" : "/products");
+        router.replace(
+          me.role === "admin"
+            ? "/admin"
+            : me.role === "retail_seller"
+              ? "/seller/showroom"
+              : "/products"
+        );
       } catch {
         router.replace("/products");
       }

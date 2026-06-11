@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>클러스터 A · 고아 행 방지 — 앱 보상(rollback)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070b13; --bg2:#0d1320; --panel:#101829; --line:#1f2c47;
+    --ink:#e9eef8; --muted:#8a97ad; --faint:#5a6680;
+    --ok:#37e0a0; --fail:#ff5d6c; --warn:#ffb454; --accent:#5b8cff; --teal:#2fd6c6;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans KR',system-ui,sans-serif;
+    --disp:'Black Han Sans',var(--sans);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+    background-image:
+      radial-gradient(900px 500px at 12% -8%, rgba(91,140,255,.16), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(47,214,198,.10), transparent 55%),
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:auto,auto,46px 46px,46px 46px;
+    background-position:0 0,0 0,-1px -1px,-1px -1px;
+    background-attachment:fixed,fixed,fixed,fixed;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:linear-gradient(180deg,transparent,rgba(7,11,19,.55) 70%,var(--bg));}
+  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 22px 120px}
+
+  /* HERO */
+  header.hero{padding:88px 0 40px}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.32em;color:var(--accent);
+    text-transform:uppercase;display:flex;align-items:center;gap:12px}
+  .eyebrow::before{content:"";width:46px;height:2px;background:var(--accent);display:inline-block}
+  h1{font-family:var(--disp);font-weight:400;font-size:clamp(40px,7vw,82px);line-height:.98;
+    margin:.28em 0 .12em;letter-spacing:-.01em}
+  h1 .hl{color:transparent;-webkit-text-stroke:1.6px var(--accent);text-stroke:1.6px var(--accent)}
+  .lede{font-size:clamp(16px,2.2vw,20px);color:var(--muted);max-width:62ch}
+  .lede b{color:var(--ink);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:30px;font-size:13.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:8px}
+  .dot{width:13px;height:13px;border-radius:3px;display:inline-block}
+
+  /* SECTION TITLES */
+  .sec{margin-top:78px}
+  .sec-h{display:flex;align-items:baseline;gap:16px;margin-bottom:6px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--faint);letter-spacing:.2em}
+  .sec-h h2{font-size:clamp(22px,3.4vw,30px);margin:0;font-weight:700;letter-spacing:-.01em}
+  .sec-cap{color:var(--muted);max-width:70ch;margin:0 0 26px}
+
+  /* CONCEPT before/after */
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .ba-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 20px 16px;position:relative;overflow:hidden}
+  .ba-card.bad{border-color:rgba(255,93,108,.32)}
+  .ba-card.good{border-color:rgba(55,224,160,.32)}
+  .ba-card h4{margin:0 0 4px;font-size:15px;font-family:var(--mono);letter-spacing:.04em}
+  .ba-card.bad h4{color:var(--fail)} .ba-card.good h4{color:var(--ok)}
+  .ba-card p{margin:8px 2px 0;font-size:13.5px;color:var(--muted)}
+  .ba svg{width:100%;height:auto;display:block}
+
+  /* A-CARDS */
+  .cards{display:grid;grid-template-columns:1fr;gap:18px}
+  .card{background:linear-gradient(180deg,var(--panel),#0c1220);border:1px solid var(--line);
+    border-radius:18px;padding:22px 24px 18px;position:relative;overflow:hidden;
+    transition:border-color .35s,transform .35s,box-shadow .35s}
+  .card:hover{border-color:rgba(91,140,255,.45);transform:translateY(-3px);
+    box-shadow:0 18px 48px -22px rgba(91,140,255,.5)}
+  .card::after{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--ok),var(--accent) 55%,var(--teal))}
+  .c-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .tag{font-family:var(--disp);font-size:26px;color:var(--accent);line-height:1}
+  .c-head h3{margin:0;font-size:19px;font-weight:700;flex:0 0 auto}
+  .chip{margin-left:auto;font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;
+    padding:5px 11px;border-radius:999px;border:1px solid}
+  .chip-soft{color:var(--teal);border-color:rgba(47,214,198,.4);background:rgba(47,214,198,.07)}
+  .chip-hard{color:var(--warn);border-color:rgba(255,180,84,.4);background:rgba(255,180,84,.08)}
+  .card svg{width:100%;height:auto;display:block;margin:6px 0 4px}
+  .orphan{font-size:13.5px;color:var(--muted);margin:6px 2px 0;display:flex;gap:8px;align-items:flex-start}
+  .orphan b{color:var(--warn);font-weight:600}
+  .src{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:12px 2px 0;
+    border-top:1px dashed var(--line);padding-top:10px}
+  .src::before{content:"› "}
+
+  /* SAFETY + RESULT */
+  .grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:stretch}
+  .note{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+  .note h4{margin:0 0 12px;font-size:16px}
+  .note ul{margin:0;padding-left:0;list-style:none}
+  .note li{position:relative;padding:9px 0 9px 28px;font-size:14px;color:var(--muted);border-bottom:1px solid rgba(31,44,71,.6)}
+  .note li:last-child{border-bottom:0}
+  .note li::before{content:"";position:absolute;left:4px;top:16px;width:9px;height:9px;border-radius:50%}
+  .note li.k::before{background:var(--teal)} .note li.w::before{background:var(--warn)}
+
+  .stats{display:flex;flex-direction:column;gap:14px}
+  .stat{background:linear-gradient(180deg,var(--panel),#0b111d);border:1px solid var(--line);
+    border-radius:16px;padding:18px 20px;position:relative;overflow:hidden}
+  .stat .big{font-family:var(--disp);font-size:40px;line-height:1;color:var(--ok)}
+  .stat .big.blue{color:var(--accent)} .stat .big.amber{color:var(--warn)}
+  .stat .lbl{font-size:13px;color:var(--muted);margin-top:6px}
+  .stat .sub{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
+
+  footer{margin-top:70px;text-align:center;color:var(--faint);font-family:var(--mono);font-size:12px;
+    border-top:1px solid var(--line);padding-top:26px}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  @media(max-width:760px){
+    .ba,.grid2{grid-template-columns:1fr}
+    .chip{margin-left:0}
+    header.hero{padding:60px 0 30px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero reveal">
+    <div class="eyebrow">리스크 감사 · HIGH · 클러스터 A</div>
+    <h1>2단계가 무너지면<br><span class="hl">1단계를 회수</span>한다</h1>
+    <p class="lede">DB가 트랜잭션으로 못 묶는 "2단계 작업"에서, 중간에 실패하면 <b>고아(orphan) 행</b>이 남았다.
+    이제 실패 시 <b>앱(FastAPI)이 직접 1단계를 되돌린다</b> — DDL·SQL 실행 없이. <b>4건 전부 적용 · 159 tests 통과.</b></p>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--ok)"></i>1단계 성공</span>
+      <span><i class="dot" style="background:var(--fail)"></i>2단계 실패</span>
+      <span><i class="dot" style="background:var(--teal)"></i>보상(되돌리기)</span>
+      <span><i class="dot" style="background:var(--warn)"></i>막은 고아 행</span>
+    </div>
+  </header>
+
+  <!-- CONCEPT -->
+  <section class="sec reveal">
+    <div class="sec-h"><span class="sec-n">00</span><h2>개념 — 고아 행 vs 보상</h2></div>
+    <p class="sec-cap">"1단계 성공 → 2단계 실패"면 1단계 결과물이 쓰레기로 남는다. 보상은 그 1단계를 도로 회수해 정합을 지킨다.</p>
+    <div class="ba">
+      <div class="ba-card bad reveal">
+        <h4>BEFORE · 보상 없음</h4>
+        <svg viewBox="0 0 460 210" role="img" aria-label="보상 없음: 2단계 실패 시 고아 행이 남음">
+          <defs>
+            <marker id="ar-blue" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9Z" fill="#5b8cff"/></marker>
+            <marker id="ar-red" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9Z" fill="#ff5d6c"/></marker>
+          </defs>
+          <rect x="20" y="34" width="170" height="60" rx="11" fill="#0e1626" stroke="#37e0a0" stroke-width="1.4"/>
+          <text x="105" y="60" text-anchor="middle" fill="#37e0a0" font-family="IBM Plex Mono" font-size="13">1단계 ✓</text>
+          <text x="105" y="80" text-anchor="middle" fill="#8a97ad" font-family="IBM Plex Mono" font-size="12">생성됨</text>
+          <line x1="190" y1="64" x2="252" y2="64" stroke="#5b8cff" stroke-width="2" marker-end="url(#ar-blue)"/>
+          <rect x="258" y="34" width="170" height="60" rx="11" fill="#1a0f16" stroke="#ff5d6c" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text x="343" y="60" text-anchor="middle" fill="#ff5d6c" font-family="IBM Plex Mono" font-size="13">2단계 ✗</text>
+          <text x="343" y="80" text-anchor="middle" fill="#8a97ad" font-family="IBM Plex Mono" font-size="12">실패</text>
+          <line x1="105" y1="94" x2="105" y2="128" stroke="#ffb454" stroke-width="2" marker-end="url(#ar-red)"/>
+          <rect x="34" y="132" width="142" height="20" rx="5" fill="rgba(255,180,84,.10)" stroke="rgba(255,180,84,.5)"/>
+          <rect x="42" y="158" width="142" height="20" rx="5" fill="rgba(255,180,84,.06)" stroke="rgba(255,180,84,.28)"/>
+          <text x="115" y="146" text-anchor="middle" fill="#ffb454" font-family="IBM Plex Mono" font-size="11">👻 고아 행</text>
+          <text x="343" y="150" text-anchor="middle" fill="#5a6680" font-family="IBM Plex Mono" font-size="11.5">방치</text>
+        </svg>
+        <p>1단계 산출물이 영영 남아 — 재가입·재등록을 막는다.</p>
+      </div>
+      <div class="ba-card good reveal">
+        <h4>AFTER · 앱 보상</h4>
+        <svg viewBox="0 0 460 210" role="img" aria-label="보상 적용: 2단계 실패 시 1단계를 회수">
+          <defs>
+            <marker id="ar-blue2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9Z" fill="#5b8cff"/></marker>
+            <marker id="ar-teal" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#2fd6c6"/></marker>
+          </defs>
+          <rect x="20" y="34" width="170" height="60" rx="11" fill="#0e1626" stroke="#37e0a0" stroke-width="1.4"/>
+          <text x="105" y="58" text-anchor="middle" fill="#37e0a0" font-family="IBM Plex Mono" font-size="13">1단계 ✓</text>
+          <text x="105" y="78" text-anchor="middle" fill="#2fd6c6" font-family="IBM Plex Mono" font-size="11.5">↩ 회수됨</text>
+          <line x1="190" y1="64" x2="252" y2="64" stroke="#5b8cff" stroke-width="2" marker-end="url(#ar-blue2)"/>
+          <rect x="258" y="34" width="170" height="60" rx="11" fill="#1a0f16" stroke="#ff5d6c" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text x="343" y="58" text-anchor="middle" fill="#ff5d6c" font-family="IBM Plex Mono" font-size="13">2단계 ✗</text>
+          <text x="343" y="78" text-anchor="middle" fill="#8a97ad" font-family="IBM Plex Mono" font-size="12">실패</text>
+          <path d="M343 94 C 343 168, 105 168, 105 100" fill="none" stroke="#2fd6c6" stroke-width="2.2" marker-end="url(#ar-teal)"/>
+          <text x="224" y="184" text-anchor="middle" fill="#2fd6c6" font-family="IBM Plex Mono" font-size="12">보상 = 1단계 되돌리기</text>
+        </svg>
+        <p>실패하면 곧장 1단계를 회수 → 고아 0, 정합 유지.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- A CARDS -->
+  <section class="sec reveal">
+    <div class="sec-h"><span class="sec-n">01–04</span><h2>실제로 고친 4곳</h2></div>
+    <p class="sec-cap">네 군데 모두 같은 패턴 — <b style="color:var(--ink)">1단계 → 2단계 실패 → 보상으로 회수</b>. 보상 방식만 대상에 맞게 다르다.</p>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <!-- SAFETY + RESULT -->
+  <section class="sec reveal">
+    <div class="sec-h"><span class="sec-n">05</span><h2>안전장치 &amp; 결과</h2></div>
+    <p class="sec-cap">보상은 "best-effort 원자성" — 99% 케이스를 막되, 보상마저 실패해도 사고를 키우지 않게 설계했다.</p>
+    <div class="grid2">
+      <div class="note reveal">
+        <h4>설계 규칙</h4>
+        <ul>
+          <li class="k"><b>보상 실패 → 원래 에러 우선 전파.</b> 보상이 또 실패하면 <code style="font-family:var(--mono);color:var(--teal)">log.warning</code>만 남기고 진짜 원인을 그대로 올린다(보상 실패가 원인을 가리지 않음).</li>
+          <li class="k"><b>soft-delete 원칙.</b> 회수는 <code style="font-family:var(--mono);color:var(--teal)">deleted_at</code> 세팅(상품·도매업체). hard DELETE 금지 규칙 준수.</li>
+          <li class="w"><b>A-1만 예외 — 하드 삭제.</b> auth.users는 GoTrue 관리라 soft-delete 개념이 없어 <code style="font-family:var(--mono);color:var(--warn)">admin.delete_user</code>로 정리.</li>
+          <li class="w"><b>완벽한 원자성은 아님.</b> 진짜 단일 트랜잭션은 Postgres RPC(DDL) 필요 → 향후 A-2/A-3 승격 가능, 지금은 보류.</li>
+        </ul>
+      </div>
+      <div class="stats reveal">
+        <div class="stat"><div class="big">159</div><div class="lbl">backend tests 통과</div><div class="sub">기존 153 + 보상 검증 6</div></div>
+        <div class="stat"><div class="big blue">0</div><div class="lbl">사장님 SQL 실행</div><div class="sub">DDL 없음 · 앱 코드만 변경</div></div>
+        <div class="stat"><div class="big amber">1</div><div class="lbl">남은 액션</div><div class="sub">make stop &amp;&amp; make dev (라이브 반영)</div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    ezmerce v2 · 클러스터 A 고아 행 방지(앱 보상) · 2026-06-07 · v2-dev<br>
+    근거: app/services/{accounts,products,uploads}.py · app/routers/{auth,products,uploads,admin}.py
+  </footer>
+
+</div>
+
+<script>
+const ITEMS = [
+  { id:"A-1", title:"회원가입",
+    s1:["1단계 · Auth 계정 생성","create_auth_user()"],
+    s2:["2단계 · 프로필 시드","insert_profile()"],
+    comp:"delete_auth_user()", hard:true,
+    orphan:"auth.users 고아 → 같은 이메일 재가입 영구 불가",
+    src:"app/services/accounts.py · app/routers/auth.py" },
+  { id:"A-2", title:"상품 단건등록",
+    s1:["1단계 · 상품 생성","insert_product()"],
+    s2:["2단계 · SKU 삽입","insert_skus()"],
+    comp:"soft_delete_product()", hard:false,
+    orphan:"SKU 없는 빈 상품 + platform_code 소비",
+    src:"app/services/products.py · app/routers/products.py" },
+  { id:"A-3", title:"대량등록 (엑셀)",
+    s1:["1단계 · 상품 생성 (그룹별)","insert_product()"],
+    s2:["2단계 · SKU 삽입","insert_skus()"],
+    comp:"soft_delete_product() + 그룹만 error", hard:false,
+    orphan:"고아 상품 — 단, 나머지 그룹은 계속 진행(격리)",
+    src:"app/services/uploads.py · app/routers/uploads.py" },
+  { id:"A-4", title:"계정 승인",
+    s1:["1단계 · 도매업체 생성","create_wholesaler()"],
+    s2:["2단계 · 승인 연결","set_status(approved)"],
+    comp:"soft_delete_wholesaler()", hard:false,
+    orphan:"고아 wholesaler + 승인 미연결",
+    src:"app/services/accounts.py · app/routers/admin.py" },
+];
+
+function svg(it){
+  // viewBox 760x238 — 두 단계 박스 + 정방향 화살표 + 아래로 휘어 돌아오는 보상 화살표
+  const m = it.id.replace("-","");
+  return `
+  <svg viewBox="0 0 760 238" role="img" aria-label="${it.title} 보상 흐름">
+    <defs>
+      <marker id="fwd${m}" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#5b8cff"/></marker>
+      <marker id="cmp${m}" markerWidth="11" markerHeight="11" refX="7.5" refY="5.5" orient="auto"><path d="M0 0L11 5.5L0 11Z" fill="#2fd6c6"/></marker>
+    </defs>
+    <!-- step 1 -->
+    <rect x="44" y="40" width="288" height="86" rx="14" fill="#0e1626" stroke="#37e0a0" stroke-width="1.5"/>
+    <circle cx="70" cy="66" r="9" fill="rgba(55,224,160,.16)" stroke="#37e0a0"/><text x="70" y="70" text-anchor="middle" fill="#37e0a0" font-size="11">✓</text>
+    <text x="90" y="70" fill="#cdd6e6" font-family="IBM Plex Sans KR" font-size="13.5" font-weight="600">${it.s1[0]}</text>
+    <text x="64" y="104" fill="#37e0a0" font-family="IBM Plex Mono" font-size="14">${it.s1[1]}</text>
+    <text x="316" y="60" text-anchor="end" fill="#2fd6c6" font-family="IBM Plex Mono" font-size="11">↩ 회수됨</text>
+
+    <!-- forward arrow -->
+    <line x1="332" y1="83" x2="424" y2="83" stroke="#5b8cff" stroke-width="2.4" marker-end="url(#fwd${m})"/>
+
+    <!-- step 2 (fail) -->
+    <rect x="430" y="40" width="288" height="86" rx="14" fill="#1a0f16" stroke="#ff5d6c" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <circle cx="456" cy="66" r="9" fill="rgba(255,93,108,.16)" stroke="#ff5d6c"/><text x="456" y="70" text-anchor="middle" fill="#ff5d6c" font-size="11">✗</text>
+    <text x="476" y="70" fill="#cdd6e6" font-family="IBM Plex Sans KR" font-size="13.5" font-weight="600">${it.s2[0]}</text>
+    <text x="450" y="104" fill="#ff5d6c" font-family="IBM Plex Mono" font-size="14">${it.s2[1]}</text>
+    <text x="700" y="60" text-anchor="end" fill="#ff5d6c" font-family="IBM Plex Mono" font-size="11">실패 ⚡</text>
+
+    <!-- compensation return curve: step2 bottom -> step1 bottom -->
+    <path d="M574 126 C 574 196, 188 196, 188 130" fill="none" stroke="#2fd6c6" stroke-width="2.4" marker-end="url(#cmp${m})"/>
+    <rect x="300" y="176" width="170" height="26" rx="13" fill="rgba(47,214,198,.10)" stroke="rgba(47,214,198,.45)"/>
+    <text x="385" y="193" text-anchor="middle" fill="#2fd6c6" font-family="IBM Plex Mono" font-size="12.5">보상 · ${it.comp.length>22?it.comp.slice(0,22)+"…":it.comp}</text>
+  </svg>`;
+}
+
+document.getElementById("cards").innerHTML = ITEMS.map(it=>`
+  <article class="card reveal">
+    <div class="c-head">
+      <span class="tag">${it.id}</span>
+      <h3>${it.title}</h3>
+      <span class="chip ${it.hard?'chip-hard':'chip-soft'}">${it.hard?'GoTrue 하드 삭제 (예외)':'soft-delete (deleted_at)'}</span>
+    </div>
+    ${svg(it)}
+    <p class="orphan"><b>막은 고아 ⚠</b> <span>${it.orphan}</span></p>
+    <p class="orphan" style="color:var(--teal)"><b style="color:var(--teal)">보상 ↩</b> <span style="font-family:var(--mono);font-size:12.5px;color:var(--teal)">${it.comp}</span></p>
+    <p class="src">${it.src}</p>
+  </article>`).join("");
+
+// staggered reveal
+const io = new IntersectionObserver((es)=>{
+  es.forEach((e,i)=>{ if(e.isIntersecting){ setTimeout(()=>e.target.classList.add("in"), i*70); io.unobserve(e.target);} });
+},{threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

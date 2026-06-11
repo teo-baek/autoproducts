@@ -280,3 +280,18 @@ export const GoogleDrive = (p: P) => (
     <path d="m8 3 8 0 5 9-4 0M8 3 3 12l4 7 4-7M16 3l-8 14h12l1-2" />
   </svg>
 );
+
+/* ── 셀러 상단 내비(에디토리얼) ──────────────────────────────────────────── */
+export const Bag = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6 7h12l-1 13a2 2 0 0 1-2 1.9H9A2 2 0 0 1 7 20L6 7Z" />
+    <path d="M9 7V6a3 3 0 0 1 6 0v1" />
+  </svg>
+);
+
+export const User = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+);

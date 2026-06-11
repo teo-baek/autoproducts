@@ -40,7 +40,11 @@ from app.services.excel_parse import parse_template_rows
 from app.services.image_match import match_filename_to_product
 from app.services.image_process import process_image_bytes, thumb_path
 
-_IMG_WORKERS = 8
+# 커밋 중 이미지 재가공 동시 수 — Cloud Run(512Mi/1Gi)에서 PIL 디코드 피크 메모리 한도.
+# 개별 업로드(썸네일 미생성) 대량을 8 동시로 디코드하면 512Mi OOM(503+재시작) → 보수적으로 낮춤.
+# ZIP staging 의 _ZIP_WORKERS(4) 와 동일 기조. 배치(_IMG_BATCH)마다 executor 를 새로 만들어 메모리 회수.
+_IMG_WORKERS = 4
+_IMG_BATCH = 16
 
 # ZIP 흡수 설정
 _ZIP_IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
@@ -130,6 +134,7 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
 
     created, insert_errors = [], []
     for g in groups:
+        product = None
         try:
             product = repo.insert_product({
                 "wholesaler_id": wholesaler_id,
@@ -142,6 +147,13 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
             repo.insert_skus([{**s, "product_id": product["id"]} for s in g["skus"]])
             created.append(product)
         except Exception as e:   # 충돌 등 — 상품 단위로 격리, 친화 사유로 기록
+            # 보상(A-3): product 는 생겼는데 SKU 삽입이 실패하면 SKU 없는 고아 상품이 남는다.
+            # 그 경우 방금 만든 상품을 soft-delete 해 정리(insert_product 자체 실패면 product=None → 정리 불필요).
+            if product is not None and hasattr(repo, "soft_delete_product"):
+                try:
+                    repo.soft_delete_product(product["id"])
+                except Exception:  # noqa: BLE001 — 보상 실패해도 등록 흐름은 계속
+                    log.warning("대량등록 SKU 실패 후 고아 상품 정리 실패 product_id=%s", product.get("id"))
             insert_errors.append({"source_p_number": g["source_p_number"], "reason": _friendly_db_error(e)})
 
     errors = res.errors + insert_errors
@@ -223,9 +235,13 @@ def attach_images(repo, job_id: str, images: list[dict],
     can_process = (process and to_process
                    and hasattr(repo, "download_object") and hasattr(repo, "upload_object"))
     if can_process:
-        with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
-            for status in ex.map(lambda r: _process_one_image(repo, r), to_process):
-                processed[status] += 1
+        # 배치 단위 가공 — 배치마다 executor 종료로 디코드 메모리 회수 + 동시 수 제한(_IMG_WORKERS).
+        # 개별 업로드 대량(예: 250장)이 512Mi/1Gi 안에서 OOM 없이 끝나게 한다(staging 과 같은 배치 패턴).
+        for i in range(0, len(to_process), _IMG_BATCH):
+            batch = to_process[i:i + _IMG_BATCH]
+            with ThreadPoolExecutor(max_workers=_IMG_WORKERS) as ex:
+                for status in ex.map(lambda r: _process_one_image(repo, r), batch):
+                    processed[status] += 1
 
     inserted = repo.insert_images(rows) if rows else []
     prev_matched = job.get("matched_rows") or 0

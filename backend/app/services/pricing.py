@@ -37,3 +37,30 @@ def visible_price(
     if vis == "retail":
         return {"price": sku["retail_price"]}
     return {"price": None}  # 'none' / 미설정+기본 none → 가격 미노출
+
+
+def visible_price_columns(
+    role: str,
+    seller_type: str | None,
+    sku: dict,
+    viewer_org: str | None = None,
+    price_visibility: str | None = None,
+) -> dict:
+    """스타일 엑셀(도매가/판매가 2칸 고정 레이아웃)용 — 역할별로 채울 칸 정규화.
+
+    가격 결정은 visible_price() 단일 진실을 재사용(셰이핑 우회 금지, CLAUDE.md §가격 노출).
+    결과를 항상 {wholesale_price, retail_price} 2칸으로 펼치되, 미노출 칸은 None.
+    - 관리뷰(admin·도매 본인) → 둘 다 채움
+    - 단일가 노출(셀러/에이전시) → 노출 모드에 맞는 칸 하나만, 나머지 None
+    - 미노출 → 둘 다 None
+    """
+    p = visible_price(role, seller_type, sku, viewer_org=viewer_org, price_visibility=price_visibility)
+    if "wholesale_price" in p:                       # 관리뷰: 도매가+판매가 둘 다
+        return {"wholesale_price": p.get("wholesale_price"), "retail_price": p.get("retail_price")}
+    price = p.get("price")
+    if price is None:                                # 미노출
+        return {"wholesale_price": None, "retail_price": None}
+    vis = price_visibility or _default_visibility(role, seller_type)
+    if vis == "wholesale":
+        return {"wholesale_price": price, "retail_price": None}
+    return {"wholesale_price": None, "retail_price": price}  # retail

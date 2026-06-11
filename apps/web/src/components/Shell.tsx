@@ -3,8 +3,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogoutDialog } from "./LogoutDialog";
+import { useSearch } from "./SearchProvider";
 import {
   Bell,
   Book,
@@ -34,6 +35,8 @@ const NAV: NavItem[] = [
  */
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { query, setQuery } = useSearch();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -103,7 +106,13 @@ export function Shell({ children }: { children: ReactNode }) {
             />
             <input
               type="search"
-              placeholder="주문, 고객, 상품 검색..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // 상품관리 밖에서 검색·엔터 → 상품관리로 이동(현재 검색 대상은 상품).
+                if (e.key === "Enter" && pathname !== "/products") router.push("/products");
+              }}
+              placeholder="상품 검색 (상품명·품번)…"
               className="w-full rounded-[var(--radius)] border border-border bg-subtle py-2.5 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-placeholder focus:border-ink focus:ring-2 focus:ring-ink/15"
             />
           </div>

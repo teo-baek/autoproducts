@@ -50,6 +50,31 @@ class Agency(_Entity):
     deleted_at: datetime | None = None
 
 
+class WholesaleManager(_Entity):
+    """도매관리자(도매연합) = 멀티테넌트 최상위. 1차 = LALAS 1행."""
+    id: str
+    name: str
+    biz_number: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    deleted_at: datetime | None = None
+
+
+class ManagerWholesaler(_Entity):
+    """도매상 ↔ 도매관리자 소속 연결표(단일 manager_id 칸 금지 — n:m forward-compat).
+    1차엔 도매상당 살아있는 1행(부분 unique 강제)."""
+    id: str
+    manager_id: str
+    wholesaler_id: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    deleted_at: datetime | None = None
+
+
 class Profile(_Entity):
     id: str
     role: UserRole
@@ -58,6 +83,7 @@ class Profile(_Entity):
     phone: str | None = None
     wholesaler_id: str | None = None      # 도매 직원 소속 도매업체
     agency_id: str | None = None          # 에이전시 직원 소속 / 에이전시 소속 셀러를 관리하는 에이전시
+    manager_id: str | None = None         # 도매관리자(테넌트) 연계 — 셀러 연계 / admin 자기 테넌트
     seller_type: SellerType | None = None
     price_visibility: PriceVisibility | None = None
     approved_at: datetime | None = None

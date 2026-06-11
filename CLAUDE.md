@@ -8,6 +8,7 @@
 - DB 마이그레이션: `backend/migrations/` (실행 순서: `_v2_core.sql` → `_02_price_visibility.sql` → `_03_soft_delete.sql`)
 - 프론트엔드: `apps/web/` (Next.js App Router + Tailwind v4). **UI/디자인 작업 전 디자인 가이드 필독** (아래 §프론트엔드).
 - **로컬 실행/포트**: 루트 `Makefile` 사용 — `make dev`(프론트+백엔드 동시) · `make web`(:3555) · `make api`(:8444) · `make stop` · `make test` · `make help`. 개별 명령: 백엔드 `cd backend && .venv/bin/python -m app.main` → **:8444**(`PORT` env override 가능), 프론트 `cd apps/web && npm run dev` → **:3555**. 프론트→백엔드 base URL = `http://localhost:8444`(env `NEXT_PUBLIC_API_BASE_URL`). CORS는 개발 중 `allow_origins=["*"]`(운영 전 화이트리스트로 좁힐 것).
+- ⚠️ **`PUBLIC_BASE_URL` = "프론트(공개 카드)" 도메인 — 절대 백엔드/API URL 금지.** QR 타깃·공개 카드(`/p?code=`)·**엑셀의 QR 링크**가 전부 이 prefix(`qr_target_url` → `{PUBLIC_BASE_URL}/p?code=…`)를 쓴다. `/p?code=`를 서빙하는 건 **프론트(Next, 정적 export)** 이므로 값은 항상 **프론트 도메인**: dev=`http://localhost:3555`(폰 스캔은 LAN IP), 운영=**Firebase Hosting**(`https://<GCP_PROJECT>.web.app`, 예 `https://ezmerce.web.app`). 🚫 여기에 백엔드 Cloud Run URL 을 넣으면 **API 주소가 QR·엑셀로 외부에 공개**되고(보안) `/p?code=`가 백엔드엔 없어 깨진다(`/p/{code}`는 JSON API). 백엔드 호출 URL은 `WEB_API_BASE_URL`(=`NEXT_PUBLIC_API_BASE_URL`) — **별개**다. (Cloud Run env 는 `make deploy-api` 재배포 시에만 갱신.)
 
 ## 프론트엔드 (디자인 시스템) — UI 작업 전 필독
 시안 PDF에서 추출한 디자인 시스템이 있다. **임의로 색/폰트/간격을 만들지 말고 토큰·가이드를 따른다.**
@@ -30,6 +31,13 @@
 - **UNIQUE는 부분 인덱스**(`... WHERE deleted_at IS NULL`)로 둔다 → soft delete 후 같은 값 재등록 허용. 단 `products.platform_code`는 영구 식별자(QR 대상)라 전체 UNIQUE 유지(재사용 X).
 - "보관(`status='archived'`)"과 "삭제(`deleted_at`)"는 **다른 개념** — archived는 진열 내림(복구 쉬움), deleted_at은 제거.
 
+### 트랜잭션 / 데이터 일관성 — 다단계 쓰기 시 고려
+- **supabase-py(PostgREST)는 여러 statement를 한 트랜잭션으로 못 묶는다.** 그래서 "1단계 성공 → 2단계 실패"면 1단계 산출물이 **고아(orphan) 행**으로 남을 수 있다(예: auth user 생성 후 profile 실패, product 생성 후 SKU 실패).
+- **새 백엔드 기능에서 "여러 행/테이블을 연달아 쓰는" 흐름을 만들 땐, 일관성 보호가 필요한지 먼저 판단하라.** 필요하면 둘 중 하나:
+  - **앱 보상(compensation)** — 2단계 실패 시 `except`에서 1단계를 되돌린다(soft-delete / GoTrue `admin.delete_user` 등). DDL 불필요·즉시 적용. 보상 자체 실패는 `log.warning` + **원래 예외 우선 전파**(보상 실패가 진짜 원인을 가리지 않게). best-effort 원자성. *(현행 채택 방식 — `accounts.py`/`products.py`/`uploads.py`의 register·approve·ingest 참고)*
+  - **Postgres RPC(plpgsql 단일 트랜잭션)** — 진짜 원자성이 필요할 때. `.sql`로 함수 작성(**DDL이라 사용자가 Supabase SQL Editor에서 실행**), 앱은 `sb.rpc(...)` 호출로 교체.
+- **단순 단건 쓰기·읽기, 또는 부분 실패가 무해한 경우엔 굳이 넣지 말 것.** 과설계 금지 — "이 흐름이 중간에 깨지면 고아/불일치가 남나?"가 Yes일 때만 적용한다.
+
 ### 가격 노출 — 역할(권한)별 차등 ⚠️ 실수 잦은 부분
 **가격은 보는 사람의 역할/권한에 따라 다르게(또는 아예 안) 보여야 한다. 서버(FastAPI)가 권위적으로 셰이핑하며, 클라이언트가 보낸 값은 절대 신뢰 금지.** 단일 진실: `app/services/pricing.py`의 `visible_price()`.
 
@@ -45,7 +53,7 @@
 - 관리뷰(admin·도매 본인) → `{ "wholesale_price", "retail_price" }` (필드 2개)
 - 일반(노출 허용) → `{ "price": <number> }` (단일가, 도매/판매 중 무엇인지는 서버가 결정)
 - 미노출 → `{ "price": null }`
-- 공개 QR 카드(`GET /p/{code}`) → **가격 필드 자체가 없음**.
+- 공개 QR 카드(`GET /p/{code}`) → **비로그인/익명은 가격·재고 필드 자체가 없음**(최소 공개 카드). 단 **로그인 + 승인된 셀러가 토큰을 실어 요청하면** 서버가 `visible_price()`로 **역할별 가격 + 색상/사이즈별 재고(`skus[]`)**를 추가로 내려준다(에이전시 소속 셀러는 `price:null`=「가격 문의」). 즉 익명엔 절대 가격 미노출, 노출은 항상 `visible_price()` 통과 — `get_current_user_optional`로 선택적 인증(`routers/public.py`).
 
 **프론트 규칙(어기지 말 것):**
 - 가격을 **클라이언트에서 계산/추론하지 말 것**. 서버가 준 필드만 그대로 렌더.

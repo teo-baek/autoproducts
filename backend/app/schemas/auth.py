@@ -10,13 +10,15 @@ class CurrentUser(BaseModel):
     agency_id: str | None = None  # 에이전시 직원 소속 / 에이전시 소속 셀러를 관리하는 에이전시
     price_visibility: str | None = None  # 관리자 설정형 가격 노출('wholesale'|'retail'|'none')
     company_name: str | None = None  # 회사명(소매=상호, 도매/에이전시=조직명)
+    manager_id: str | None = None  # 도매관리자(테넌트) id — 셀러 연계 / 도매 소속(연결표) / admin 자기 테넌트
 
 
 class RegisterRequest(BaseModel):
-    """공개 회원가입 요청. 자가가입 허용 role = retail_seller | wholesaler | agency (admin만 관리자 온보딩)."""
+    """공개 회원가입 요청. 자가가입 허용 role = retail_seller | wholesaler (admin만 관리자 온보딩).
+    [1차 비활성] agency 는 forward-compat 로만 정의 — 자가가입 미허용(app/services/accounts.py)."""
     email: str
     password: str = Field(min_length=8)
-    role: str                          # 'retail_seller' | 'wholesaler' | 'agency'
+    role: str                          # 'retail_seller' | 'wholesaler' ('agency' 는 1차 비활성)
     seller_type: str | None = None     # role='retail_seller' 일 때 'independent'|'agency_affiliated'
     full_name: str | None = None
     company_name: str | None = None    # 회사명/상호

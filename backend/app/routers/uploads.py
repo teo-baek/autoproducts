@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -36,6 +37,11 @@ class SupabaseUploadRepo:
 
     def insert_skus(self, rows):
         return self.sb.table("product_skus").insert(rows).execute().data
+
+    def soft_delete_product(self, product_id):
+        # 보상용(A-3): 대량등록 중 SKU 삽입 실패 시 방금 만든 상품을 soft-delete(고아 방지, hard DELETE 금지).
+        now = datetime.now(timezone.utc).isoformat()
+        self.sb.table("products").update({"deleted_at": now}).eq("id", product_id).execute()
 
     def create_upload_job(self, d):
         return self.sb.table("upload_jobs").insert(d).execute().data[0]

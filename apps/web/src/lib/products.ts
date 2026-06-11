@@ -11,6 +11,7 @@ export type Me = {
   agency_id: string | null;
   price_visibility: string | null;
   company_name: string | null;
+  manager_id: string | null; // 연계된 도매관리자(테넌트) — 멀티테넌트 스코프 키
 };
 
 export type Sku = {
@@ -97,6 +98,8 @@ export type Account = {
   company_name: string | null;
   full_name: string | null;
   wholesaler_id: string | null;
+  agency_id: string | null; // 에이전시 소속 셀러 → 소속 에이전시(1차 미운영이라 보통 null)
+  agency_name: string | null; // 서버가 agency_id→name 으로 보강(어드민 유형 표시용)
   price_visibility: string | null;
   created_at?: string | null;
 };
@@ -118,6 +121,49 @@ export const SELLER_TYPE_LABEL: Record<string, string> = {
   independent: "라이브셀러",
   agency_affiliated: "에이전시 소속",
 };
+
+/* ── 도매관리자(테넌트) — 소속 도매 합산 상품관리 (FR-5) ────────────────── */
+export type AdminSku = {
+  color: string;
+  size: string;
+  stock: number;
+  wholesale_price: number; // admin 은 도매가+판매가 둘 다 노출
+  retail_price: number;
+};
+
+export type AdminProduct = {
+  id: string;
+  platform_code: string;
+  source_p_number: string;
+  item_name: string;
+  category: string | null;
+  status: string;
+  is_sold_out: boolean;
+  representative_image_url: string | null;
+  created_at: string | null;
+  wholesaler_id: string;
+  wholesaler_name: string | null; // 행마다 어느 도매 것인지(도매 출처)
+  skus: AdminSku[];
+};
+
+export type AdminProductList = {
+  items: AdminProduct[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export function listAdminProducts(
+  params: { limit?: number; offset?: number; search?: string; status?: string } = {}
+): Promise<AdminProductList> {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  if (params.search) q.set("search", params.search);
+  if (params.status) q.set("status", params.status);
+  const qs = q.toString();
+  return api<AdminProductList>(`/admin/products${qs ? `?${qs}` : ""}`, { auth: true });
+}
 
 /* ── 상품 CRUD ──────────────────────────────────────────────────────────── */
 export function listProducts(params: {
@@ -352,6 +398,14 @@ export const won = (n: number | null | undefined) =>
 export function aggregateColors(p: Product): string {
   return [...new Set(p.skus.map((s) => s.color))].join(", ") || "—";
 }
+/** 목록 표시용: 앞 max개 색상 + "외 N색". 전체 목록은 호출부에서 title 툴팁으로 노출. */
+export function colorSummary(p: Product, max = 4): { text: string; full: string; more: number } {
+  const colors = [...new Set(p.skus.map((s) => s.color))].filter(Boolean);
+  const full = colors.join(", ") || "—";
+  if (colors.length <= max) return { text: full, full, more: 0 };
+  const more = colors.length - max;
+  return { text: `${colors.slice(0, max).join(", ")} 외 ${more}색`, full, more };
+}
 export function aggregateSizes(p: Product): string {
   return [...new Set(p.skus.map((s) => s.size))].join(", ") || "—";
 }
@@ -362,4 +416,15 @@ export function repWholesale(p: Product): number | null {
 }
 export function totalStock(p: Product): number {
   return p.skus.reduce((a, s) => a + (s.stock ?? 0), 0);
+}
+
+/**
+ * 음수 재고 규약: `stock < 0` = **품절이면서 |stock| 만큼 예약(주문 대기)**.
+ * 예) stock=-4 → 가용 0 · 예약 4 / stock=5 → 가용 5 · 예약 0 / stock=0 → 품절·예약 0.
+ */
+export const skuReserved = (s: Pick<Sku, "stock">): number => ((s.stock ?? 0) < 0 ? -(s.stock ?? 0) : 0);
+export const skuAvailable = (s: Pick<Sku, "stock">): number => ((s.stock ?? 0) > 0 ? (s.stock ?? 0) : 0);
+/** 품절 판정 = 명시 품절 플래그 OR 총재고 0. (재고 없어도 예약주문은 받으므로 목록에서 '제외'하진 않고 '품절만 보기' 필터·뱃지에만 사용) */
+export function isSoldOut(p: Product): boolean {
+  return p.is_sold_out || totalStock(p) <= 0;
 }

@@ -38,10 +38,16 @@ export default function LoginPage() {
       }
       return;
     }
-    // 역할별 진입점: 관리자 → 관리자 콘솔, 그 외 → 도매 상품 관리
+    // 역할별 진입점: 관리자 → 콘솔, 셀러 → 쇼룸, 그 외(도매) → 상품 관리
     try {
       const me = await getMe();
-      router.push(me.role === "admin" ? "/admin" : "/products");
+      router.push(
+        me.role === "admin"
+          ? "/admin"
+          : me.role === "retail_seller"
+            ? "/seller/showroom"
+            : "/products"
+      );
     } catch {
       router.push("/products");
     }

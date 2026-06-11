@@ -27,7 +27,7 @@ def test_export_route_returns_xlsx_with_role_shaped_price(monkeypatch):
         "product_skus": [{"color": "화이트", "size": "F",
                           "wholesale_price": 12000, "retail_price": 29000, "stock": 3}],
     }]
-    monkeypatch.setattr(catalog_mod, "_query_catalog_export_rows", lambda sb, limit: rows)
+    monkeypatch.setattr(catalog_mod, "_query_catalog_export_rows", lambda sb, limit, wholesaler_ids=None: rows)
     monkeypatch.setattr(catalog_mod, "get_supabase", lambda: object())
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         id="u", role="retail_seller", status="approved", seller_type="independent")
@@ -62,7 +62,7 @@ def test_export_pcode_blank_for_price_hidden_seller(monkeypatch):
         "product_skus": [{"color": "화이트", "size": "F",
                           "wholesale_price": 12000, "retail_price": 29000, "stock": 3}],
     }]
-    monkeypatch.setattr(catalog_mod, "_query_catalog_export_rows", lambda sb, limit: rows)
+    monkeypatch.setattr(catalog_mod, "_query_catalog_export_rows", lambda sb, limit, wholesaler_ids=None: rows)
     monkeypatch.setattr(catalog_mod, "get_supabase", lambda: object())
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         id="u", role="retail_seller", status="approved", seller_type="agency_affiliated")

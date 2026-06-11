@@ -9,7 +9,7 @@ from app.services.uploads import (
 class FakeUploadRepo:
     def __init__(self):
         self.products = []; self.skus = []; self.jobs = []; self.images = []
-        self.seq = 0; self._pmap = {}
+        self.seq = 0; self._pmap = {}; self.deleted = []
 
     def next_platform_code(self):
         self.seq += 1; return f"EZM-{self.seq:06d}"
@@ -20,6 +20,9 @@ class FakeUploadRepo:
 
     def insert_skus(self, rows):
         self.skus.extend(rows); return rows
+
+    def soft_delete_product(self, product_id):
+        self.deleted.append(product_id)
 
     def create_upload_job(self, d):
         d = {**d, "id": "job-1"}; self.jobs.append(d); return d
@@ -132,6 +135,21 @@ def test_ingest_excel_no_valid_rows_marks_failed(tmp_path):
     out = ingest_excel(FakeUploadRepo(), "w1", str(p))
     assert out["products"] == []
     assert out["job"]["status"] == "failed"
+
+
+def test_ingest_excel_compensates_orphan_product_on_sku_failure(tmp_path):
+    # A-3 보상: product 는 생겼는데 SKU 삽입 실패 → 고아 상품 soft-delete + 해당 그룹은 error
+    class SkuFailRepo(FakeUploadRepo):
+        def insert_skus(self, rows):
+            raise Exception("skus insert failed")
+    p = tmp_path / "in.xlsx"
+    _make_xlsx(p, [("1001", "린넨셔츠", "화이트", "F", 12000, 29000)])
+    repo = SkuFailRepo()
+    out = ingest_excel(repo, "w1", str(p))
+    assert out["products"] == []                              # SKU 실패 → 생성 목록에 없음
+    assert any(e.get("source_p_number") == "1001" for e in out["errors"])
+    assert repo.deleted == ["p1"]                            # 고아 상품 보상 삭제됨
+    assert out["job"]["status"] == "failed"                  # 생성 0 → failed
 
 
 def test_attach_images_matches_by_filename_and_updates_job():

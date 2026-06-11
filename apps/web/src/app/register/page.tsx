@@ -9,12 +9,15 @@ import { AuthShell } from "@/components/AuthShell";
 import { Button, Checkbox, FileRow, Modal, SegTabs, TextField } from "@/components/ui";
 import { ArrowRight, Check } from "@/components/icons";
 
+// "agency" 는 1차 비활성(MEMBER_OPTIONS 에서 미노출) — 타입/COPY 는 복구용으로 유지한다.
 type MemberType = "retailer" | "wholesaler" | "agency";
 
 const MEMBER_OPTIONS: { value: MemberType; label: string }[] = [
   { value: "retailer", label: "Retailer (소매)" },
   { value: "wholesaler", label: "Wholesaler (도매)" },
-  { value: "agency", label: "Agency (에이전시)" },
+  // [1차 비활성] 에이전시 회원가입 미허용 — 에이전시 운영 시작 시 아래 줄 주석 해제로 복구.
+  // (백엔드 자가가입 가드 app/services/accounts.py:_SELF_REGISTER_ROLES 도 함께 풀어야 함)
+  // { value: "agency", label: "Agency (에이전시)" },
 ];
 
 const COPY: Record<MemberType, { title: string; subtitle: string; terms: string }> = {
@@ -28,6 +31,7 @@ const COPY: Record<MemberType, { title: string; subtitle: string; terms: string 
     subtitle: "도매 파트너로서 비즈니스를 확장하세요.",
     terms: "이용약관 및 개인정보 처리방침에 동의합니다. 또한 도매 파트너 약관의 모든 내용을 확인하였습니다.",
   },
+  // [1차 비활성] 에이전시 미노출 상태라 현재 사용되지 않음 — 복구 시 그대로 활성화.
   agency: {
     title: "계정 생성",
     subtitle: "에이전시 파트너로서 비즈니스를 확장하세요.",

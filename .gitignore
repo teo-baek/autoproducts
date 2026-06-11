@@ -38,3 +38,11 @@ next-env.d.ts
 deploy.env
 .gcloud-ezmerce/
 secrets/
+
+# 프론트 배포 (Firebase Hosting)
+apps/web/out/
+.firebase-ezmerce/
+apps/web/.firebase/
+firebase-debug.log*
+firebase-debug.*.log
+ui-debug.log*

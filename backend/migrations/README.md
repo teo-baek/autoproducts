@@ -14,6 +14,7 @@ Supabase **SQL Editor**에 아래 파일들을 **순서대로** 붙여넣어 실
 7. `2026-06-06_v2_core_07_product_category.sql` — 상품 분류 `products.category`(의류/잡화 등) + 부분 인덱스. 도매 상품관리 목록 필터·단일 등록 모달용. **(상품관리 화면의 카테고리 기능에 필요)**
 8. `2026-06-06_v2_core_08_image_thumbnail.sql` — `product_images.thumbnail_path`. 서버측 이미지 가공(EXIF 보정+웹 리사이즈) 산출물 경로. NULL=미가공→원본 폴백. **(이미지 업로드 가공 파이프라인에 필요)**
 9. `2026-06-06_v2_core_09_pnum_not_unique.sql` — **품번 유일성 제거**. POS 품번은 유일키 아님(같은 품번이 서로 다른 상품일 수 있음) → `(도매,품번)` 부분 유니크 인덱스 드롭 + 비유일 lookup 인덱스. 영구 식별자는 `platform_code`. **(같은 품번의 서로 다른 상품 등록·대량업로드에 필요)**
+10. `2026-06-09_v2_core_10_wholesale_manager_tenancy.sql` — **도매관리자(도매연합) 멀티테넌트 1차**. 테넌트 테이블 `wholesale_managers` + 도매상 소속 연결표 `manager_wholesalers`(단일 칸 금지 — n:m forward-compat, 도매상당 살아있는 1행 부분 unique) + `profiles.manager_id`(셀러/admin 연계) + `set_updated_at`/soft-cascade 트리거 + RLS deny + **LALAS 시드 + 기존 admin 계정(`rythmn@naver.com`, id `f50945ce…`) 연결 + backfill(기존 도매·셀러를 전부 LALAS 에 묶음)**. ⚠️ **backfill 포함 1회 실행** — 누락 시 카탈로그가 빈 결과(fail-closed)로 회귀. **(도매관리자 대시보드 합산 상품관리 + 카탈로그 테넌트 스코핑에 필요)**
 
 ## Storage 버킷 (대시보드 또는 SQL)
 - **`product-images`** — 상품 이미지 업로드용. **공개(public) 권장**(상품 사진은 카탈로그 노출이 목적). 프론트가 직접 업로드 → `representative_image_url`(public URL) 저장 + 매니페스트 매칭. 미생성 시 단일/대량 등록의 이미지 업로드만 실패(상품 데이터 등록은 정상).

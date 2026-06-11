@@ -32,6 +32,10 @@ export function WholesalerGate({ children }: { children: ReactNode }) {
           router.replace("/admin"); // 관리자는 도매 작업공간이 아니라 관리자 콘솔로
           return;
         }
+        if (me.role === "retail_seller") {
+          router.replace("/seller/showroom"); // 셀러는 셀러 작업공간(쇼룸)으로
+          return;
+        }
         if (me.role !== "wholesaler") setState({ status: "denied", me });
         else if (me.status !== "approved") setState({ status: "pending", me });
         else setState({ status: "ok", me });

@@ -13,6 +13,7 @@ class FakeAuthRepo:
         self.profiles = []
         self.auth = []
         self.uploaded = []
+        self.deleted = []          # 보상(A-1)으로 삭제된 auth user id
 
     def create_auth_user(self, email, password):
         self.auth.append({"email": email, "password": password})
@@ -22,6 +23,9 @@ class FakeAuthRepo:
         d = {**d}
         self.profiles.append(d)
         return d
+
+    def delete_auth_user(self, user_id):
+        self.deleted.append(user_id)
 
     def upload_document(self, user_id, kind, filename, content, content_type):
         self.uploaded.append((user_id, kind, len(content), content_type))
@@ -52,10 +56,19 @@ def test_register_agency_affiliated_seller_visibility_none():
     assert out["price_visibility"] == "none"        # 에이전시 소속 셀러 → 미노출
 
 
-def test_register_agency_role_has_null_seller_type():
-    out = register_account(FakeAuthRepo(), _req(role="agency", seller_type=None))
-    assert out["seller_type"] is None               # CHECK 제약(seller_type_only_for_retail) 정합
-    assert out["price_visibility"] == "retail"
+def test_register_agency_rejected_phase1():
+    # [1차 비활성] 에이전시 자가가입 미허용 — 친화 메시지로 거부, auth user 미생성.
+    repo = FakeAuthRepo()
+    with pytest.raises(RegisterError, match="준비 중"):
+        register_account(repo, _req(role="agency", seller_type=None))
+    assert repo.auth == []                           # 검증이 먼저 → orphan auth user 미생성
+
+
+# [1차 비활성 복구용] 에이전시 운영 시작 시 위 거부 테스트를 지우고 아래를 복원.
+# def test_register_agency_role_has_null_seller_type():
+#     out = register_account(FakeAuthRepo(), _req(role="agency", seller_type=None))
+#     assert out["seller_type"] is None               # CHECK 제약(seller_type_only_for_retail) 정합
+#     assert out["price_visibility"] == "retail"
 
 
 def test_register_rejects_admin_before_auth_create():
@@ -155,3 +168,26 @@ def test_register_route_duplicate_email_returns_400(monkeypatch):
     })
     assert res.status_code == 400
     assert "이미 가입" in res.json()["detail"]
+
+
+class ProfileInsertFailsRepo(FakeAuthRepo):
+    def insert_profile(self, d):
+        raise Exception("profiles insert failed")
+
+
+def test_register_compensates_orphan_auth_user_on_profile_failure():
+    # A-1 보상: Auth 계정 생성 후 profiles 시드 실패 → 방금 만든 Auth 계정 삭제(고아 방지)
+    repo = ProfileInsertFailsRepo()
+    with pytest.raises(Exception, match="profiles insert failed"):
+        register_account(repo, _req())
+    assert repo.auth and repo.auth[0]["email"] == "a@b.com"   # 1단계(Auth 생성)는 수행됨
+    assert repo.deleted == ["uid-1"]                          # 2단계 실패 → 1단계 보상(삭제)
+
+
+def test_register_orphan_compensation_failure_still_raises_original(caplog):
+    # 보상(삭제)마저 실패해도 원래 예외를 우선 전파(고아는 로그로 남김)
+    class CompFails(ProfileInsertFailsRepo):
+        def delete_auth_user(self, user_id):
+            raise Exception("delete failed too")
+    with pytest.raises(Exception, match="profiles insert failed"):
+        register_account(CompFails(), _req())

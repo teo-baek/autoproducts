@@ -5,11 +5,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutDialog } from "./LogoutDialog";
-import { LogOut, Settings, Users } from "./icons";
+import { Box, LogOut, Settings, Users } from "./icons";
 
 type NavItem = { href: string; label: string; icon: typeof Users };
 
-const NAV: NavItem[] = [{ href: "/admin", label: "가입 승인", icon: Users }];
+const NAV: NavItem[] = [
+  { href: "/admin", label: "가입 승인", icon: Users },
+  { href: "/admin/products", label: "상품 관리", icon: Box },
+];
 
 /**
  * 관리자 콘솔 셸 — 도매 작업공간(Shell)과 의도적으로 분리된 별도 크롬.
@@ -18,7 +21,8 @@ const NAV: NavItem[] = [{ href: "/admin", label: "가입 승인", icon: Users }]
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (href: string) =>
+    href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(href + "/");
 
   return (
     <div className="flex min-h-screen bg-canvas">
