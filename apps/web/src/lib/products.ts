@@ -137,6 +137,10 @@ export type AdminProduct = {
   source_p_number: string;
   item_name: string;
   category: string | null;
+  fabric_composition: string | null; // 상세 모달용(아래 필드들)
+  origin: string | null;
+  lead_time_days: string | null;
+  description: string | null;
   status: string;
   is_sold_out: boolean;
   representative_image_url: string | null;
@@ -144,6 +148,7 @@ export type AdminProduct = {
   wholesaler_id: string;
   wholesaler_name: string | null; // 행마다 어느 도매 것인지(도매 출처)
   skus: AdminSku[];
+  images: ProductImage[]; // 상세 모달 갤러리 — Product 와 구조 호환(상세 모달 재사용)
 };
 
 export type AdminProductList = {
@@ -342,6 +347,13 @@ export function productThumb(p: Product): string | null {
 }
 
 /* ── 엑셀 다운로드(인증 헤더 필요 → blob) ─────────────────────────────── */
+/** 다운로드 파일명용 타임스탬프 — YYYY_MM_DD_HH-mm-ss (로컬 시간; ':' 는 파일명 금지문자라 시간은 '-'). */
+function xlsxStamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}_${p(d.getMonth() + 1)}_${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+}
+
 export async function downloadProductsXlsx(params: {
   category?: string;
   search?: string;
@@ -360,7 +372,26 @@ export async function downloadProductsXlsx(params: {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "ezmerce-products.xlsx";
+  a.download = `상품목록_${xlsxStamp()}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** 도매관리자(테넌트) 합산 엑셀 추출 — 소속 도매 전체 상품. (인증 헤더 필요 → blob) */
+export async function downloadAdminProductsXlsx(params: { search?: string; status?: string } = {}) {
+  const q = new URLSearchParams();
+  if (params.search) q.set("search", params.search);
+  if (params.status) q.set("status", params.status);
+  const { data } = await supabase.auth.getSession();
+  const res = await fetch(`${API_BASE}/admin/products/export.xlsx?${q.toString()}`, {
+    headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {},
+  });
+  if (!res.ok) throw new Error("엑셀 추출 실패");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `도매상품목록_${xlsxStamp()}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }

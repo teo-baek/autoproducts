@@ -12,10 +12,11 @@ type Props = {
   product: Product | null;
   open: boolean;
   onClose: () => void;
-  onEdit: (p: Product) => void;
+  onEdit?: (p: Product) => void;          // 없으면 읽기 전용(도매관리자 합산 뷰 등)
+  wholesalerName?: string | null;         // 도매 출처(도매관리자 합산 뷰에서 표시)
 };
 
-export function ProductDetailModal({ product, open, onClose, onEdit }: Props) {
+export function ProductDetailModal({ product, open, onClose, onEdit, wholesalerName }: Props) {
   const [sel, setSel] = useState(0);
   // 상품이 바뀌면 갤러리 선택 초기화 — 렌더 중 상태 조정(React 권장 패턴, effect 불필요)
   const [seenId, setSeenId] = useState(product?.id);
@@ -65,9 +66,11 @@ export function ProductDetailModal({ product, open, onClose, onEdit }: Props) {
           <Button variant="secondary" onClick={onClose}>
             닫기
           </Button>
-          <Button onClick={() => onEdit(product)}>
-            <Pencil width={16} height={16} /> 상품 정보 수정
-          </Button>
+          {onEdit && (
+            <Button onClick={() => onEdit(product)}>
+              <Pencil width={16} height={16} /> 상품 정보 수정
+            </Button>
+          )}
         </>
       }
     >
@@ -113,6 +116,11 @@ export function ProductDetailModal({ product, open, onClose, onEdit }: Props) {
             <p className="mt-1.5 font-mono text-xs text-muted-foreground">
               품번 {product.source_p_number} · {product.platform_code}
             </p>
+            {wholesalerName && (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
+                <Box width={13} height={13} className="text-muted-foreground" /> 도매 출처 · {wholesalerName}
+              </p>
+            )}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-5 gap-y-3.5">

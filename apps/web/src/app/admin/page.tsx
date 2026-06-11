@@ -142,7 +142,11 @@ export default function AdminApprovalsPage() {
                 </tr>
               ) : (
                 rows.map((a) => {
-                  const st = STATUS_BADGE[a.status] ?? { label: a.status, tone: "neutral" as const };
+                  // 거절 탭은 전역 status 가 그대로 pending(관리자별 거절) → '거절' 뱃지로 표시
+                  const st =
+                    tab === "rejected"
+                      ? { label: "거절", tone: "danger" as const }
+                      : STATUS_BADGE[a.status] ?? { label: a.status, tone: "neutral" as const };
                   return (
                     <tr key={a.id} className="border-b border-divider/70 last:border-0 hover:bg-canvas">
                       <td className="px-5 py-3.5 font-medium text-foreground">{a.email ?? "—"}</td>
@@ -157,8 +161,9 @@ export default function AdminApprovalsPage() {
                         <Badge tone={st.tone}>{st.label}</Badge>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex justify-end gap-2">
-                          {a.status !== "rejected" && (
+                        {/* 승인/거절은 '승인 대기' 탭에서만. 승인됨·거절됨 탭은 로그(액션 없음) */}
+                        {tab === "pending" ? (
+                          <div className="flex justify-end gap-2">
                             <Button
                               variant="secondary"
                               onClick={() => act(a, "reject")}
@@ -167,17 +172,17 @@ export default function AdminApprovalsPage() {
                             >
                               <XIcon width={14} height={14} /> 거절
                             </Button>
-                          )}
-                          {a.status !== "approved" && (
                             <Button
                               onClick={() => act(a, "approve")}
                               loading={busyId === a.id}
                               className="px-3 py-2 text-xs"
                             >
-                              <Check width={14} height={14} /> {a.status === "rejected" ? "재승인" : "승인"}
+                              <Check width={14} height={14} /> 승인
                             </Button>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="text-right text-xs text-muted-foreground">—</div>
+                        )}
                       </td>
                     </tr>
                   );

@@ -36,9 +36,10 @@ def approve_account(repo, target_id: str, admin_id: str, admin_manager_id: str |
         name = (prof.get("company_name") or prof.get("full_name") or "도매업체") if prof else "도매업체"
         wholesaler_id = repo.create_wholesaler(name)["id"]
     try:
-        manager_id = admin_manager_id if role == "retail_seller" else None
+        # 승인 = 이 도매관리자(테넌트)가 신청자를 'claim'. 셀러·도매 모두 manager_id 로 소속 확정
+        # → status=approved + manager_id 라서 다른 관리자의 공유 대기 풀에서 사라진다(claim).
         result = repo.set_status(target_id, "approved", admin_id,
-                                 wholesaler_id=wholesaler_id, manager_id=manager_id)
+                                 wholesaler_id=wholesaler_id, manager_id=admin_manager_id)
         # 도매 승인: 소속 도매를 admin 의 테넌트(도매관리자)에 연결(FR-2/FR-7). 멱등.
         if role == "wholesaler" and admin_manager_id:
             wid = wholesaler_id or (prof.get("wholesaler_id") if prof else None)
@@ -55,8 +56,13 @@ def approve_account(repo, target_id: str, admin_id: str, admin_manager_id: str |
                 log.warning("승인 실패 후 고아 도매업체 정리 실패 wholesaler_id=%s", wholesaler_id)
         raise
 
-def reject_account(repo, target_id: str, admin_id: str) -> dict:
-    return repo.set_status(target_id, "rejected", admin_id)
+def reject_account(repo, target_id: str, admin_id: str, admin_manager_id: str | None = None) -> dict:
+    """관리자별 거절(패스) — 전역 상태를 바꾸지 않는다(신청자는 다른 도매관리자에게 계속 pending).
+
+    승인 admin 의 테넌트 기준으로 manager_rejections 에 기록(멱등). 거절한 관리자 목록에서만
+    사라지고, 다른 관리자에겐 계속 보인다. '재승인' 개념 없음(거절은 그 관리자에겐 종결 로그).
+    """
+    return repo.add_manager_rejection(target_id, admin_manager_id, by=admin_id)
 
 
 def register_account(repo, req) -> dict:

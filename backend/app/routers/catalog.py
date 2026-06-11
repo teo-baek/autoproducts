@@ -6,7 +6,7 @@ from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.services.pricing import visible_price, visible_price_columns
 from app.services.excel_export import build_render_xlsx, cell_image_bytes, cell_image_path, price_code
-from app.services.images import representative_image_url
+from app.services.images import representative_image_url, storage_path_from_public_url
 from app.services.tenancy import scoped_wholesaler_ids
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -111,7 +111,9 @@ def _styled_export_rows(rows: list[dict], user: CurrentUser) -> list[dict]:
             "item_name": r.get("item_name"),
             "fabric_composition": r.get("fabric_composition"),
             "platform_code": r.get("platform_code"),
-            "_storage_path": cell_image_path(imgs[0]) if imgs else None,  # 썸네일 우선
+            # 썸네일 우선. product_images 없으면(단일 업로드) 대표 URL→경로 폴백(엑셀 사진 누락 방지).
+            "_storage_path": (cell_image_path(imgs[0]) if imgs
+                              else storage_path_from_public_url(r.get("representative_image_url"))),
             "skus": skus,
         })
     return out

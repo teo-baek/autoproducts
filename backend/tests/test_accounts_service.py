@@ -11,6 +11,7 @@ class FakeProfiles:
         self.created_wholesalers = []
         self.deleted_wholesalers = []        # 보상(A-4)으로 soft-delete 된 도매업체 id
         self.links = []                      # link_wholesaler_to_manager 기록(테넌트 소속 연결)
+        self.rejections = []                 # add_manager_rejection 기록(관리자별 거절/패스)
 
     def get_profile(self, uid):
         return self.profile
@@ -31,6 +32,10 @@ class FakeProfiles:
     def link_wholesaler_to_manager(self, wholesaler_id, manager_id, by=None):
         self.links.append({"wholesaler_id": wholesaler_id, "manager_id": manager_id, "by": by})
         return self.links[-1]
+
+    def add_manager_rejection(self, profile_id, manager_id, by=None):
+        self.rejections.append({"profile_id": profile_id, "manager_id": manager_id, "by": by})
+        return self.rejections[-1]
 
 
 def test_approve_sets_status_approved():
@@ -58,10 +63,12 @@ def test_approve_wholesaler_with_existing_id_does_not_recreate():
     assert out["wholesaler_id"] is None               # 추가 연결 없음(기존 유지)
 
 
-def test_reject_sets_status_rejected():
+def test_reject_records_per_manager_rejection():
+    # 거절 = 관리자별 패스. 전역 상태 안 바꿈(다른 관리자에겐 계속 pending) → set_status 호출 X.
     repo = FakeProfiles(profile={"role": "wholesaler"})
-    out = reject_account(repo, target_id="seller-1", admin_id="admin-1")
-    assert out["status"] == "rejected"
+    reject_account(repo, target_id="w-1", admin_id="admin-1", admin_manager_id="m-lalas")
+    assert repo.rejections == [{"profile_id": "w-1", "manager_id": "m-lalas", "by": "admin-1"}]
+    assert repo.updated == {}
 
 
 # ── A-4 보상: 승인 도중 set_status 실패 시 방금 만든 도매업체 정리 ──────────────

@@ -1,5 +1,6 @@
 import io
 import logging
+import threading
 import time
 from collections import OrderedDict
 
@@ -121,24 +122,27 @@ def cell_image_path(img: dict | None) -> str | None:
 _CELL_CACHE: "OrderedDict[str, tuple[float, bytes]]" = OrderedDict()
 _CELL_CACHE_MAX = 512
 _CELL_CACHE_TTL = 600  # 10분 — 같은 경로 이미지가 교체되면 그 사이 stale 가능(B2B 라 드묾)
+_CELL_CACHE_LOCK = threading.Lock()  # 병렬 다운로드(엑셀 export) 시 캐시 동시접근 보호
 
 
 def _cache_get(path: str) -> bytes | None:
-    hit = _CELL_CACHE.get(path)
-    if not hit:
-        return None
-    if time.time() - hit[0] >= _CELL_CACHE_TTL:
-        _CELL_CACHE.pop(path, None)
-        return None
-    _CELL_CACHE.move_to_end(path)
-    return hit[1]
+    with _CELL_CACHE_LOCK:
+        hit = _CELL_CACHE.get(path)
+        if not hit:
+            return None
+        if time.time() - hit[0] >= _CELL_CACHE_TTL:
+            _CELL_CACHE.pop(path, None)
+            return None
+        _CELL_CACHE.move_to_end(path)
+        return hit[1]
 
 
 def _cache_put(path: str, data: bytes) -> None:
-    _CELL_CACHE[path] = (time.time(), data)
-    _CELL_CACHE.move_to_end(path)
-    while len(_CELL_CACHE) > _CELL_CACHE_MAX:
-        _CELL_CACHE.popitem(last=False)
+    with _CELL_CACHE_LOCK:
+        _CELL_CACHE[path] = (time.time(), data)
+        _CELL_CACHE.move_to_end(path)
+        while len(_CELL_CACHE) > _CELL_CACHE_MAX:
+            _CELL_CACHE.popitem(last=False)
 
 
 def cell_image_bytes(sb, storage_path: str | None, bucket: str = "product-images") -> bytes | None:

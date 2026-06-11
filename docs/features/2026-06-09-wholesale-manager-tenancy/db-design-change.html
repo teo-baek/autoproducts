@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DB 설계 변화 — 도매관리자 멀티테넌트 1차</title>
+<style>
+  :root{
+    --bg:#0a0b0f; --tx:#eef1f7; --mut:#aab2c5; --mut2:#8590a6;
+    --line:rgba(255,255,255,.10); --card:rgba(255,255,255,.045);
+    --acc:#8b7bff; --acc2:#22d3ee; --new:#4ade80; --newbg:rgba(74,222,128,.10); --newln:rgba(74,222,128,.45);
+    --keep:rgba(255,255,255,.55); --warn:#fbbf24; --pink:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);line-height:1.6;
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:radial-gradient(48rem 30rem at 10% -10%,rgba(139,123,255,.18),transparent 60%),
+      radial-gradient(44rem 30rem at 108% 6%,rgba(34,211,238,.13),transparent 55%),
+      radial-gradient(40rem 26rem at 50% 118%,rgba(74,222,128,.08),transparent 60%);}
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 22px 90px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+  h1{font-size:clamp(26px,4.4vw,42px);line-height:1.14;margin:14px 0 8px;font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(100deg,#fff,var(--acc) 55%,var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--mut);font-size:16.5px;max-width:72ch}
+  h2{font-size:20px;font-weight:750;margin:46px 0 14px;letter-spacing:-.01em;
+    display:flex;align-items:center;gap:10px}
+  h2 .b{width:6px;height:20px;border-radius:3px;background:linear-gradient(var(--acc),var(--acc2))}
+
+  /* 요약 카드 */
+  .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+  @media(max-width:680px){.sum{grid-template-columns:1fr}}
+  .scard{border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--card)}
+  .scard .big{font-size:34px;font-weight:800;line-height:1}
+  .scard.add{border-color:var(--newln);background:var(--newbg)} .scard.add .big{color:var(--new)}
+  .scard.chg .big{color:var(--warn)} .scard.del .big{color:var(--mut2)}
+  .scard .t{font-weight:700;margin-top:8px}
+  .scard .d{font-size:13px;color:var(--mut);margin-top:4px}
+
+  /* ERD */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 18px;font-size:13px;color:var(--mut)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:13px;height:13px;border-radius:4px;border:1px solid}
+  .sw-new{background:var(--newbg);border-color:var(--newln)}
+  .sw-keep{background:var(--card);border-color:var(--line)}
+
+  .erd{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:8px}
+  .ent{width:min(420px,100%);border:1px solid var(--line);border-radius:14px;background:#0e1016;overflow:hidden}
+  .ent.new{border-color:var(--newln);box-shadow:0 0 0 1px var(--newln),0 18px 50px -26px rgba(74,222,128,.55)}
+  .ent .h{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line);
+    background:rgba(255,255,255,.03)}
+  .ent.new .h{background:var(--newbg)}
+  .ent .h .nm{font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:14.5px}
+  .ent .h .ko{font-size:12px;color:var(--mut)}
+  .badge{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.05em;padding:2px 8px;border-radius:999px}
+  .badge.new{background:var(--new);color:#06270f}
+  .badge.keep{background:rgba(255,255,255,.08);color:var(--mut)}
+  .cols{padding:8px 14px 12px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
+  .cols div{padding:2.5px 0;display:flex;gap:8px;align-items:baseline}
+  .cols .pk{color:var(--acc2);font-weight:700}
+  .cols .fk{color:var(--acc)}
+  .cols .add{color:var(--new);font-weight:700}
+  .cols .tag{margin-left:auto;font-size:10.5px;color:var(--mut2)}
+
+  .rel{display:flex;flex-direction:column;align-items:center;color:var(--mut);font-size:12px;padding:7px 0}
+  .rel .line{width:2px;height:16px;background:linear-gradient(var(--newln),var(--acc))}
+  .rel .lab{border:1px dashed var(--newln);border-radius:999px;padding:3px 11px;background:var(--newbg);color:#bdf0cf;
+    font-family:ui-monospace,Menlo,monospace;margin:3px 0}
+  .rel.keep .line{background:var(--line)} .rel.keep .lab{border-color:var(--line);background:var(--card);color:var(--mut)}
+
+  .row{display:flex;gap:14px;align-items:flex-start;justify-content:center;flex-wrap:wrap;width:100%}
+  .side{display:flex;flex-direction:column;gap:10px}
+  .mini{width:230px;border:1px solid var(--line);border-radius:12px;background:#0e1016;padding:9px 13px}
+  .mini .nm{font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:13px}
+  .mini .ko{font-size:11.5px;color:var(--mut)}
+  .mini .badge{float:right}
+
+  /* 경로 */
+  .path{margin-top:10px;border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--card)}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}
+  .node{border:1px solid var(--line);border-radius:10px;padding:9px 13px;background:#0e1016;font-weight:600}
+  .node.n{border-color:var(--newln);background:var(--newbg);color:#cdeed7}
+  .arr{color:var(--acc2);font-weight:800}
+  .path .cap{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--mut2);display:block;margin-top:3px}
+
+  /* before/after */
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  @media(max-width:680px){.ba{grid-template-columns:1fr}}
+  .bacard{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--card)}
+  .bacard h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.1em}
+  .bacard.before h4{color:var(--pink)} .bacard.after h4{color:var(--new)}
+  .bacard ul{margin:0;padding-left:18px;font-size:14px;color:var(--mut)}
+  .bacard li{margin:6px 0}
+  .bacard b{color:var(--tx)}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--mut2);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="eyebrow">DB 설계 변화 · v2 → +멀티테넌트</span>
+  <h1>DB 설계가 이렇게 바뀌었습니다</h1>
+  <p class="sub">핵심은 단순합니다 — <b style="color:#fff">표(테이블) 2개와 칸(컬럼) 1개를 “추가”만</b> 했고,
+    기존 테이블·가격 규칙은 <b style="color:#fff">하나도 안 바꿨습니다.</b> 그래서 1차 동작은 예전과 똑같고,
+    먼 미래(도매관리자 여러 개)로 갈 때 DB를 다시 갈아엎지 않아도 됩니다.</p>
+
+  <!-- 요약 -->
+  <div class="sum">
+    <div class="scard add">
+      <div class="big">+2</div>
+      <div class="t">테이블 추가</div>
+      <div class="d"><code>wholesale_managers</code>(테넌트) · <code>manager_wholesalers</code>(소속 연결표)</div>
+    </div>
+    <div class="scard add">
+      <div class="big">+1</div>
+      <div class="t">컬럼 추가</div>
+      <div class="d"><code>profiles.manager_id</code> — 셀러/관리자가 어느 도매관리자 소속인지</div>
+    </div>
+    <div class="scard del">
+      <div class="big">0</div>
+      <div class="t">변경·삭제</div>
+      <div class="d">기존 테이블·가격 셰이핑(visible_price)·상품 구조 전부 그대로</div>
+    </div>
+  </div>
+
+  <!-- ERD -->
+  <h2><span class="b"></span> 새 구조 한눈에 (피라미드)</h2>
+  <div class="legend">
+    <span><span class="swatch sw-new"></span> 이번에 추가</span>
+    <span><span class="swatch sw-keep"></span> 기존 그대로</span>
+    <span style="color:var(--mut2)">PK=기본키 · FK=참조</span>
+  </div>
+
+  <div class="erd">
+    <!-- tenant -->
+    <div class="ent new">
+      <div class="h"><span class="nm">wholesale_managers</span><span class="ko">도매관리자(테넌트) · LALAS</span><span class="badge new">NEW</span></div>
+      <div class="cols">
+        <div><span class="pk">id</span> uuid <span class="tag">PK</span></div>
+        <div>name <span class="tag">'LALAS'</span></div>
+        <div>biz_number · 감사컬럼 · deleted_at</div>
+      </div>
+    </div>
+
+    <div class="rel">
+      <div class="line"></div>
+      <div class="lab">1 ── n  (manager_wholesalers 연결표)</div>
+      <div class="line"></div>
+    </div>
+
+    <!-- join table -->
+    <div class="ent new">
+      <div class="h"><span class="nm">manager_wholesalers</span><span class="ko">도매상 ↔ 관리자 소속(연결표)</span><span class="badge new">NEW</span></div>
+      <div class="cols">
+        <div><span class="pk">id</span> uuid <span class="tag">PK</span></div>
+        <div><span class="fk">manager_id</span> → wholesale_managers</div>
+        <div><span class="fk">wholesaler_id</span> → wholesalers <span class="tag">UNIQUE(살아있는 1행)</span></div>
+        <div style="color:var(--mut2)">※ 칸 1개 대신 연결표 → 먼 미래 n:m 시 줄만 추가</div>
+      </div>
+    </div>
+
+    <div class="rel"><div class="line"></div><div class="lab">n ── 1</div><div class="line"></div></div>
+
+    <!-- wholesalers + products -->
+    <div class="row">
+      <div class="side">
+        <div class="ent">
+          <div class="h"><span class="nm">wholesalers</span><span class="ko">도매상(도매업체)</span><span class="badge keep">그대로</span></div>
+          <div class="cols">
+            <div><span class="pk">id</span> uuid <span class="tag">PK</span></div>
+            <div>name · biz_number</div>
+          </div>
+        </div>
+        <div class="rel keep"><div class="line"></div><div class="lab">1 ── n</div><div class="line"></div></div>
+        <div class="ent">
+          <div class="h"><span class="nm">products</span><span class="ko">상품</span><span class="badge keep">그대로</span></div>
+          <div class="cols">
+            <div><span class="pk">id</span> · <span class="fk">wholesaler_id</span> → wholesalers</div>
+            <div>platform_code <span class="tag">QR 식별자</span></div>
+            <div>item_name · source_p_number · status</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="mini"><span class="badge keep">그대로</span><div class="nm">product_skus</div><div class="ko">색상×사이즈·도매가·판매가·재고</div></div>
+        <div class="mini"><span class="badge keep">그대로</span><div class="nm">product_images</div><div class="ko">상품 사진·썸네일</div></div>
+        <div class="mini" style="border-color:var(--newln);background:var(--newbg)">
+          <span class="badge new">+컬럼</span>
+          <div class="nm">profiles</div>
+          <div class="ko">계정(셀러/도매직원/admin)</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:6px">
+            <span style="color:var(--new);font-weight:700">+ manager_id</span> → wholesale_managers<br>
+            <span style="color:var(--mut2)">role · status · wholesaler_id · agency_id …</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:16px;font-size:14px">
+    즉 <b style="color:#fff">도매관리자(LALAS) → 도매상 여러 곳 → 그 밑 상품들</b> 이 한 줄로 꿰지고,
+    <b style="color:#fff">셀러는 <code>profiles.manager_id</code> 로 도매관리자에 붙습니다.</b>
+  </p>
+
+  <!-- 데이터 경로 -->
+  <h2><span class="b"></span> 핵심 동작: 셀러가 보는 상품은 어떻게 정해지나</h2>
+  <div class="path">
+    <div class="flow">
+      <div class="node n">셀러<span class="cap">profiles.manager_id</span></div>
+      <span class="arr">→</span>
+      <div class="node n">도매관리자<span class="cap">wholesale_managers (LALAS)</span></div>
+      <span class="arr">→</span>
+      <div class="node n">소속 도매들<span class="cap">manager_wholesalers</span></div>
+      <span class="arr">→</span>
+      <div class="node">그 도매의 상품<span class="cap">products.wholesaler_id</span></div>
+    </div>
+    <p class="sub" style="margin:14px 0 0;font-size:13.5px">
+      셀러는 “내가 연계된 도매관리자의 소속 도매 상품만” 봅니다. <b style="color:#fff">1차엔 모두 LALAS라 결과는 예전(전체 노출)과 동일</b>,
+      둘째 도매관리자가 생기는 순간 자동으로 갈라집니다(코드·DB 수정 0).
+    </p>
+  </div>
+
+  <!-- before/after -->
+  <h2><span class="b"></span> 개념적으로 뭐가 달라졌나</h2>
+  <div class="ba">
+    <div class="bacard before">
+      <h4>Before — v2(기존)</h4>
+      <ul>
+        <li><b>admin = 전 세계 1명</b> (테넌트 개념 없음)</li>
+        <li>카탈로그 = <b>활성 상품 전체</b> 무조건 노출</li>
+        <li>도매상이 누구 소속인지 <b>표현 불가</b></li>
+        <li><code>/admin</code> = 가입 승인만</li>
+      </ul>
+    </div>
+    <div class="bacard after">
+      <h4>After — +멀티테넌트</h4>
+      <ul>
+        <li><b>도매관리자(테넌트) = LALAS</b> + admin이 자기 테넌트 관리</li>
+        <li>카탈로그 = <b>연계된 도매관리자의 소속 도매 상품만</b>(스코프)</li>
+        <li>도매상 소속 = <b>연결표</b>로 표현(n:m 준비)</li>
+        <li><code>/admin</code> = 가입 승인 <b>+ 소속 도매 합산 상품관리</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <p>실제 DDL: <code>backend/migrations/2026-06-09_v2_core_10_wholesale_manager_tenancy.sql</code> (Supabase에 적용 완료 확인됨).
+      설계 근거: <code>…/wholesale-manager-tenancy-tech-design.md §2</code>.</p>
+    <p>가격 노출 규칙(<code>visible_price</code>)·상품/SKU/이미지 구조는 <b>손대지 않았습니다</b> — 그래서 회귀 위험이 낮습니다.</p>
+  </footer>
+</div>
+</body>
+</html>

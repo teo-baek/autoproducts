@@ -9,6 +9,7 @@ from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.schemas.product import ProductCreate, SkuReplaceRequest
 from app.services.excel_export import build_render_xlsx, cell_image_bytes, cell_image_path
+from app.services.images import storage_path_from_public_url
 from app.services.pricing import visible_price
 from app.services.products import register_product, soft_delete_product
 from app.services.platform_code import next_platform_code
@@ -186,7 +187,9 @@ def export_products(
     render_rows = []
     for it in items:
         imgs = it.get("images") or []
-        storage_path = cell_image_path(imgs[0]) if imgs else None  # 대표(정렬상 첫째) · 썸네일 우선
+        # 썸네일 우선. images[] 없으면(단일 업로드) 대표 URL→경로 폴백(엑셀에 사진 누락 방지).
+        storage_path = (cell_image_path(imgs[0]) if imgs
+                        else storage_path_from_public_url(it.get("representative_image_url")))
         render_rows.append({
             "source_p_number": it["source_p_number"],
             "item_name": it["item_name"],

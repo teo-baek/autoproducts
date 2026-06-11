@@ -76,5 +76,15 @@
 - 인증: Supabase Auth(`auth.users`) ↔ `profiles` 1:1. 역할/권한은 `profiles`.
 - **계정 역할**: `admin`(도소매 관리자) / `wholesaler`(도매) / `retail_seller`(소매셀러, `seller_type`=independent|agency_affiliated) / `agency`. **`admin` = 도소매 관리자 계정 = LALAS 연합 또는 에이전시 리더에게 제공**해 폐쇄망을 직접 관리 → 가입 **승인/거절·삭제** + 셀러별 **`price_visibility` 설정**(`require_role("admin")` 가드, `routers/admin.py`). 단 '조직 리더가 소속 셀러를 직접 위임 관리'(에이전시 셀프 운영 등)는 **Phase 2**(에이전시 1차 미운영).
 
+### 상품 이미지 — 두 소스(단일 업로드 vs 대량) ⚠️ 누락 잦은 부분
+상품 사진의 **저장 위치가 등록 경로에 따라 다르다. 새로 사진을 읽거나 출력하는 코드는 반드시 두 소스를 모두 처리하라.**
+- **단일 업로드** → `products.representative_image_url`(전체 공개 URL) 만 채워지고 **`product_images` 행은 없음**.
+- **대량(엑셀+ZIP) 업로드** → **`product_images[]` 에만** 기록되고 `representative_image_url` 은 비어 있음.
+- 그래서 **한 소스만 보면 절반의 상품에서 사진이 빈다.** 실제로 두 번 터졌다: ① 카탈로그/쇼룸이 `representative_image_url` 만 봐서 대량 상품 사진 누락 → ② 엑셀 export 가 `product_images` 만 봐서 단일 업로드 상품 사진 누락(동일 클래스 버그, 반대 방향).
+- **공용 헬퍼를 쓸 것**(`app/services/images.py`):
+  - 화면 표시용 URL = `representative_image_url(rep_url, product_images)` (rep_url 우선 → 없으면 product_images 폴백).
+  - 엑셀 셀 다운로드용 storage 경로 = `images[]` 있으면 `cell_image_path(imgs[0])`(썸네일 우선), 없으면 `storage_path_from_public_url(representative_image_url)` 폴백. (catalog/products/admin export 3곳 동일 적용됨)
+- 프론트 상세 모달도 같은 폴백(`images[]` → 없으면 `representative_image_url`)을 쓴다 — **모달엔 보이는데 엑셀엔 안 보이면 이 폴백 누락을 의심하라.**
+
 ### 1차 범위 메모
 - 대상: 라이브커머스 셀러만. **에이전시는 실운영 미구현**(역할/테이블/`agency_id` 데이터 모델만 forward-compat 준비). 일반 소매업체·주문/결제/배송·정산은 Phase 2+.

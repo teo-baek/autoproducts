@@ -38,9 +38,9 @@ install: ## 백엔드+프론트 의존성 설치 (uv + npm)
 build: ## 프론트 프로덕션 빌드 (next build)
 	cd $(WEB_DIR) && npm run build
 
-stop: ## :3555 / :8444 에 떠있는 dev 서버 종료
-	-@lsof -ti:$(WEB_PORT) | xargs kill 2>/dev/null
-	-@lsof -ti:$(API_PORT) | xargs kill 2>/dev/null
+stop: ## :3555 / :8444 에 떠있는 dev 서버 종료 (강제 kill -9 — 고아 uvicorn 도 확실히 정리)
+	-@lsof -ti:$(WEB_PORT) | xargs kill -9 2>/dev/null
+	-@lsof -ti:$(API_PORT) | xargs kill -9 2>/dev/null
 	@echo "stopped :$(WEB_PORT), :$(API_PORT)"
 
 ports: ## 포트 사용 현황 확인
