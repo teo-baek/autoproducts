@@ -118,9 +118,9 @@ export default function UnmatchedPage() {
   }, [dirty]);
 
   // 드롭 = 임시 매칭(로컬). 이미 매칭된 행에 다시 드롭하면 교체(기존 이미지는 풀로 복귀).
-  function onDropImage(p: Product) {
+  // imageId 는 drop 핸들러가 dataTransfer 에서 직접 읽어 넘긴다(state 타이밍에 의존 X).
+  function onDropImage(p: Product, imageId: string | null) {
     setOverPid(null);
-    const imageId = dragId;
     setDragId(null);
     if (!imageId) return;
     const img = pool.find((i) => i.id === imageId);
@@ -287,11 +287,15 @@ export default function UnmatchedPage() {
                       <tr
                         key={p.id}
                         onDragOver={(e) => {
-                          e.preventDefault();
+                          e.preventDefault(); // 없으면 onDrop 자체가 발동 안 함(HTML5 DnD 명세)
+                          e.dataTransfer.dropEffect = "move";
                           setOverPid(p.id);
                         }}
                         onDragLeave={() => setOverPid((cur) => (cur === p.id ? null : cur))}
-                        onDrop={() => onDropImage(p)}
+                        onDrop={(e) => {
+                          e.preventDefault(); // 브라우저 기본 드롭(이미지 URL 열기/이동) 차단 — 없으면 매칭이 안 먹힌다
+                          onDropImage(p, e.dataTransfer.getData("text/plain") || dragId);
+                        }}
                         className={`border-b border-divider/70 transition last:border-0 ${
                           isOver ? "bg-[var(--color-info-bg)] ring-1 ring-inset ring-[var(--color-info)]" : ""
                         }`}
@@ -362,10 +366,15 @@ export default function UnmatchedPage() {
                 <div
                   key={im.id}
                   draggable
-                  onDragStart={() => setDragId(im.id)}
+                  onDragStart={(e) => {
+                    // 이미지 id 를 dataTransfer 에 실어야 드래그가 정상 시작되고(Firefox 등) 드롭에서 읽을 수 있다.
+                    e.dataTransfer.setData("text/plain", im.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragId(im.id);
+                  }}
                   onDragEnd={() => setDragId(null)}
                   title={im.original_filename ?? ""}
-                  className={`group aspect-square cursor-grab overflow-hidden rounded-[var(--radius-lg)] border border-divider bg-subtle active:cursor-grabbing ${
+                  className={`group aspect-square cursor-grab select-none overflow-hidden rounded-[var(--radius-lg)] border border-divider bg-subtle active:cursor-grabbing ${
                     dragId === im.id ? "opacity-50 ring-2 ring-ink" : ""
                   }`}
                 >
@@ -373,7 +382,8 @@ export default function UnmatchedPage() {
                   <img
                     src={publicImageUrl(im.storage_path)}
                     alt={im.original_filename ?? "이미지"}
-                    className="h-full w-full object-cover transition group-hover:scale-105"
+                    draggable={false} // 안쪽 img(기본 draggable)가 드래그 소스를 가로채지 않게 — div 가 단일 소스
+                    className="pointer-events-none h-full w-full object-cover transition group-hover:scale-105"
                   />
                 </div>
               ))
