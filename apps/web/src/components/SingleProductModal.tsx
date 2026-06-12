@@ -82,6 +82,8 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
     if (!itemName.trim()) return setError("상품명을 입력해주세요.");
     if (!sku.trim()) return setError("품번(SKU)을 입력해주세요.");
     if (num(wholesale) <= 0) return setError("도매가를 입력해주세요.");
+    // 이미지 필수 — 새 파일이 없고 기존 이미지(편집 시)도 없으면 차단
+    if (!file && !preview) return setError("상품 이미지를 등록해주세요.");
 
     setLoading(true);
     try {
@@ -114,7 +116,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
         platformCode = created.platform_code;
       }
 
-      // 이미지(선택) — 실패해도 상품 저장은 유지(버킷 미생성 등)
+      // 이미지(필수) — 단, 업로드 자체 실패(버킷 미생성·네트워크)는 상품 저장 유지 + 재시도 안내
       let warn = "";
       if (file) {
         try {
@@ -232,7 +234,7 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
 
         {/* 우: 이미지 */}
         <div className="flex flex-col">
-          <SectionTitle>상품 이미지</SectionTitle>
+          <SectionTitle>상품 이미지 *</SectionTitle>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
