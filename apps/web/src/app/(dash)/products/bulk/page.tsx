@@ -75,8 +75,15 @@ export default function BulkPage() {
     getMe().then((me) => setWid(me.wholesaler_id ?? "")).catch(() => {});
   }, []);
 
+  // 단계별 오류 표시 — 검증(등록될 상품 0건 또는 행 오류) / 이미지 업로드 실패 / 등록 결과 0건.
   const errorStep =
-    step === 2 && preview && preview.errors.length > 0 ? 2 : imgFailed && step === 1 ? 1 : undefined;
+    step === 3 && commitResult && commitResult.created.length === 0
+      ? 3
+      : step === 2 && preview && (preview.errors.length > 0 || preview.product_count === 0)
+        ? 2
+        : imgFailed && step === 1
+          ? 1
+          : undefined;
 
   /* ── step 0 → 1: 엑셀 검증(드라이런 — 저장 안 함) ── */
   async function goValidate() {
@@ -204,6 +211,7 @@ export default function BulkPage() {
 
   const createdCount = commitResult?.created.length ?? 0;
   const errorCount = commitResult?.errors.length ?? 0;
+  const droppedCount = commitResult?.dropped ?? 0;
   const imgDone = (commitResult?.matched.length ?? 0) + (commitResult?.unmatched.length ?? 0);
 
   return (
@@ -260,6 +268,7 @@ export default function BulkPage() {
         <StepValidate
           errors={preview?.errors ?? []}
           dropped={preview?.dropped ?? 0}
+          productCount={preview?.product_count ?? 0}
           committing={committing}
           commitErr={commitErr}
           onBack={() => requestBack(() => setStep(1))}
@@ -272,6 +281,7 @@ export default function BulkPage() {
           created={createdCount}
           images={imgDone}
           errors={errorCount}
+          dropped={droppedCount}
           unmatched={commitResult?.unmatched.length ?? 0}
           jobId={commitResult?.job_id ?? ""}
           onRestart={reset}
@@ -601,6 +611,7 @@ function StepImageError({
 function StepValidate({
   errors,
   dropped,
+  productCount,
   committing,
   commitErr,
   onBack,
@@ -608,12 +619,14 @@ function StepValidate({
 }: {
   errors: ExcelPreview["errors"];
   dropped: number;
+  productCount: number;
   committing: boolean;
   commitErr: string | null;
   onBack: () => void;
   onNext: () => void;
 }) {
   const ok = errors.length === 0;
+  const nothingToRegister = productCount === 0; // 검사 통과한 상품이 0개면 등록해도 0건 — 커밋 차단
   return (
     <div className="text-center">
       <div className="text-left text-xs font-semibold text-muted-foreground">3단계</div>
@@ -621,7 +634,11 @@ function StepValidate({
 
       <h3 className="mt-6 text-3xl font-extrabold tracking-tight text-foreground">데이터 유효성 검사 결과</h3>
       <p className="mt-3 flex items-center justify-center gap-2 text-sm">
-        {ok ? (
+        {nothingToRegister ? (
+          <span className="flex items-center gap-1.5 font-semibold text-[var(--color-danger-fg)]">
+            <AlertTriangle width={16} height={16} /> 등록할 수 있는 상품이 없습니다.
+          </span>
+        ) : ok ? (
           <span className="flex items-center gap-1.5 font-semibold text-[var(--color-success-fg)]">
             <Check width={16} height={16} /> 오류가 발견되지 않았습니다.
           </span>
@@ -631,11 +648,17 @@ function StepValidate({
           </span>
         )}
       </p>
+      {productCount > 0 && (
+        <p className="mt-1 text-sm font-medium text-muted-foreground">
+          검사를 통과한 상품 <b className="text-foreground">{productCount}</b>건이 등록됩니다
+          {errors.length > 0 ? ` (오류 ${errors.length}건은 제외)` : ""}.
+        </p>
+      )}
 
       {dropped > 0 && (
         <div className="mx-auto mt-4 flex max-w-2xl items-start gap-2.5 rounded-[var(--radius)] bg-surface-muted px-4 py-3 text-left text-sm text-muted-foreground">
           <Info width={16} height={16} className="mt-0.5 shrink-0" />
-          품번이 없는 {dropped}개 행은 자동으로 제외했습니다.
+          상품 정보가 없는 {dropped}개 행(합계·소계 등)은 자동으로 제외했습니다.
         </div>
       )}
 
@@ -682,13 +705,15 @@ function StepValidate({
       )}
 
       <p className="mt-6 text-xs text-muted-foreground">
-        “{ok ? "상품 등록" : "오류 건너뛰고 등록"}”을 누르면 이때 실제로 상품이 등록됩니다.
+        {nothingToRegister
+          ? "등록할 상품이 없습니다. 엑셀의 품번·색상·사이즈 등을 확인한 뒤 다시 올려주세요."
+          : `“${ok ? "상품 등록" : "오류 건너뛰고 등록"}”을 누르면 이때 실제로 상품이 등록됩니다.`}
       </p>
       <div className="mt-3 flex items-center justify-end gap-3 border-t border-divider pt-5">
         <Button variant="secondary" onClick={onBack} disabled={committing}>
           이전으로
         </Button>
-        <Button onClick={onNext} loading={committing}>
+        <Button onClick={onNext} loading={committing} disabled={committing || nothingToRegister}>
           {ok ? "상품 등록" : "오류 건너뛰고 등록"}
         </Button>
       </div>
@@ -701,6 +726,7 @@ function StepDone({
   created,
   images,
   errors,
+  dropped,
   unmatched,
   jobId,
   onRestart,
@@ -708,17 +734,38 @@ function StepDone({
   created: number;
   images: number;
   errors: number;
+  dropped: number;
   unmatched: number;
   jobId: string;
   onRestart: () => void;
 }) {
+  // 실제 등록 결과를 정직하게 반영 — created=0 인데 '완료/Verified'로 위장하지 않는다(QA 3차 1~2p).
+  const fullOk = created > 0 && errors === 0 && dropped === 0;
+  const partial = created > 0 && (errors > 0 || dropped > 0);
+  const iconCls = fullOk
+    ? "bg-[var(--color-success-bg)] text-[var(--color-success-fg)]"
+    : partial
+      ? "bg-[var(--color-warning-bg)] text-[var(--color-warning-fg)]"
+      : "bg-[var(--color-danger-bg)] text-[var(--color-danger-fg)]";
+  const heading = fullOk
+    ? "상품 등록 완료"
+    : partial
+      ? "일부 상품만 등록되었습니다"
+      : "등록된 상품이 없습니다";
+  const subtitle = fullOk
+    ? "일괄 업로드 작업이 처리되었습니다."
+    : partial
+      ? `${created}건이 등록되었습니다. 제외·오류 항목은 아래 요약을 확인해 주세요.`
+      : dropped > 0 && errors === 0
+        ? "등록할 상품 정보가 있는 행이 없습니다(합계·소계 등만 있음). 엑셀 내용을 확인한 뒤 다시 올려주세요."
+        : "오류로 인해 등록된 상품이 없습니다. 엑셀 내용을 확인한 뒤 다시 시도해 주세요.";
   return (
     <div className="text-center">
-      <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[var(--color-success-bg)] text-[var(--color-success-fg)]">
-        <Check width={34} height={34} />
+      <span className={`mx-auto flex size-20 items-center justify-center rounded-full ${iconCls}`}>
+        {fullOk ? <Check width={34} height={34} /> : <AlertTriangle width={34} height={34} />}
       </span>
-      <h2 className="mt-6 text-2xl font-extrabold tracking-tight text-foreground">상품 등록 완료</h2>
-      <p className="mt-2 text-sm text-muted-foreground">일괄 업로드 작업이 처리되었습니다.</p>
+      <h2 className="mt-6 text-2xl font-extrabold tracking-tight text-foreground">{heading}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
 
       <Card className="mx-auto mt-7 max-w-2xl p-7 text-left">
         <h3 className="text-lg font-bold text-foreground">요약</h3>
@@ -741,6 +788,15 @@ function StepDone({
           </div>
         </div>
       </Card>
+
+      {dropped > 0 && (
+        <div className="mx-auto mt-5 flex max-w-2xl items-start gap-2.5 rounded-[var(--radius)] bg-surface-muted px-4 py-3.5 text-left text-sm text-muted-foreground">
+          <Info width={18} height={18} className="mt-0.5 shrink-0" />
+          <span>
+            상품 정보가 없는 <b className="text-foreground">{dropped}</b>개 행(합계·소계 등)은 등록에서 제외되었습니다.
+          </span>
+        </div>
+      )}
 
       {unmatched > 0 && (
         <div className="mx-auto mt-5 flex max-w-2xl items-start gap-2.5 rounded-[var(--radius)] bg-[var(--color-warning-bg)] px-4 py-3.5 text-left text-sm text-[var(--color-warning-fg)]">

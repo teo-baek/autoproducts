@@ -71,7 +71,7 @@
 - ⚠️ **`source_p_number`(POS 품번)는 유일키가 아니다** — 한 파일 안에서도, 시간이 지나도 같은 품번이 서로 다른 상품을 가리킬 수 있음(현장 확인, `_09`에서 `(wholesaler_id, source_p_number)` 유니크 제거). 그래서:
   - 대량등록 그룹핑은 **품번 전역 그룹핑 금지** → POS 변형 행은 연속 나열되므로 **연속된 `(품번, 상품명)` 블록**을 한 상품으로 본다(`ingest_excel`).
   - 품번→상품 lookup(`products_pnum_map`)·이미지 자동매칭은 **중복 품번이면 모호**해질 수 있음(현재 첫 매치). 재업로드 자동 dedup/upsert도 품번으로 못 한다.
-  - 엑셀에 **품번 없는 행은 폐기(드롭)** — 상품명 대용 안 함(사용자 정책, `ParseResult.dropped`).
+  - 엑셀에 **품번 없는 행**: 상품명이 있으면 진짜 상품으로 보고 **이지머스 자체 품번(`platform_code`)으로 등록**(파서가 `source_p_number=None` 마커 → `ingest_excel`이 `platform_code`로 채움). 이미지 자동매칭은 품번 기준이라 안 되므로 **미매칭 상품 관리**에서 수동 연결. 품번·상품명 **둘 다 없는 행(POS 합계/소계 잡행)만 폐기**(`ParseResult.dropped`). ※ 2026-06-12 QA 3차 1p로 변경 — 이전엔 품번 없으면 무조건 드롭이었음. **색상·사이즈는 검증 단계 필수(빈칸=행 오류로 검증 표에 표시, 파일 단위 차단 X)**.
 - **도매업체(`wholesalers`)와 에이전시(`agencies`)는 별개 테이블.** `products`는 `wholesaler_id`만 가리킨다(에이전시가 상품 소유 불가).
 - 인증: Supabase Auth(`auth.users`) ↔ `profiles` 1:1. 역할/권한은 `profiles`.
 - **계정 역할**: `admin`(도소매 관리자) / `wholesaler`(도매) / `retail_seller`(소매셀러, `seller_type`=independent|agency_affiliated) / `agency`. **`admin` = 도소매 관리자 계정 = LALAS 연합 또는 에이전시 리더에게 제공**해 폐쇄망을 직접 관리 → 가입 **승인/거절·삭제** + 셀러별 **`price_visibility` 설정**(`require_role("admin")` 가드, `routers/admin.py`). 단 '조직 리더가 소속 셀러를 직접 위임 관리'(에이전시 셀프 운영 등)는 **Phase 2**(에이전시 1차 미운영).

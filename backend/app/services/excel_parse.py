@@ -19,7 +19,7 @@ _FIELD_LABEL = {"source_p_number": "품번", "item_name": "상품명",
 _ALIASES = {
     "source_p_number": ["품번", "상품코드", "품목코드", "모델명", "제품코드", "코드", "sku"],
     "item_name": ["상품명", "품목명", "물품명", "제품명", "품명", "상품이름"],
-    "color": ["색상", "컬러", "색상명", "color"],
+    "color": ["색상", "칼라", "칼러", "컬러", "색상명", "컬러명", "color"],
     "size": ["상세사이즈", "사이즈", "규격", "size"],
     "wholesale_price": ["도매가", "도매단가", "입고가", "공급가", "도매가격", "공급가격", "단가"],
     "retail_price": ["소매가", "판매가", "소비자가", "매장판매가", "권장소비자가", "판매가격", "소매가격"],
@@ -27,7 +27,9 @@ _ALIASES = {
     "fabric_composition": ["혼용률", "혼방률", "소재"],
     "stock": ["재고정상", "재고", "현재고", "매장량", "수량"],
 }
-# 헤더에 반드시 있어야 하는 논리 컬럼(없으면 파일 단위 오류). 색상/사이즈/판매가/재고/혼용률은 선택.
+# 헤더에 반드시 있어야 하는 논리 컬럼(없으면 파일 단위 오류). 품번·상품명·도매가만 파일 단위로 막는다.
+# ⚠️ 색상·사이즈는 일부러 여기 넣지 않는다 — 컬럼이 없어도 파일을 통째로 막지 말고, '행 단위 누락 오류'로
+# 검증 표(_validate_into)에 어디가 빠졌는지 정확히 보여주기 위함(사용자 피드백). 판매가/재고/혼용률은 선택.
 _REQUIRED = {"source_p_number": "품번", "item_name": "상품명", "wholesale_price": "도매가"}
 SUPPORTED_EXTS = (".xlsx", ".xls", ".csv")
 
@@ -69,6 +71,14 @@ def _to_int_lenient(v) -> int:
         return _to_int(v)
     except (TypeError, ValueError):
         return 0
+
+
+def _text(v) -> str:
+    """셀 값 → 표시용 텍스트(공백 제거). 정수형 부동소수(95.0)는 '95' 로 — 엑셀 숫자 사이즈의
+    부동소수 잔재를 없애 TEXT 컬럼(color/size)에 안전하게 넣는다."""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
 
 
 def _norm(h) -> str:
@@ -134,15 +144,24 @@ def _validate_into(cells: list, row_index: int, res: ParseResult, col: dict) -> 
     if all(v in (None, "") for v in rec.values()):   # 완전 빈 행은 건너뜀
         return
 
-    # 품번이 없으면 행 자체를 폐기한다(사용자 정책 — 상품명 대용 안 함).
-    # 에러로 잡지 않고 dropped 로만 집계(POS 합계/소계 같은 잡행을 조용히 버림).
-    if not (rec.get("source_p_number") is not None and str(rec["source_p_number"]).strip()):
-        res.dropped += 1
-        return
-    rec["source_p_number"] = str(rec["source_p_number"]).strip()
+    has_pnum = rec.get("source_p_number") is not None and str(rec["source_p_number"]).strip()
+    has_name = rec.get("item_name") is not None and str(rec["item_name"]).strip()
+
+    # 품번이 없을 때(QA 3차 1p):
+    #  - 상품명도 없으면 POS 합계/소계 같은 잡행 → 조용히 폐기(dropped, 에러 아님).
+    #  - 상품명이 있으면 진짜 상품으로 보고 '이지머스 자체 품번(platform_code)'으로 등록한다.
+    #    파서는 source_p_number=None 마커만 남기고, ingest_excel 이 platform_code 로 채운다.
+    #    이미지 자동매칭(품번 기준)은 안 되므로 미매칭 상품 관리에서 수동 연결.
+    if not has_pnum:
+        if not has_name:
+            res.dropped += 1
+            return
+        rec["source_p_number"] = None
+    else:
+        rec["source_p_number"] = str(rec["source_p_number"]).strip()
 
     errs: list[dict] = []
-    if not (rec.get("item_name") is not None and str(rec["item_name"]).strip()):   # 상품명 필수
+    if not has_name:   # 품번은 있는데 상품명이 없으면(잡행과 구분) 오류
         errs.append({"row": row_index, "field": "상품명", "reason": "필수 값이 누락되었습니다"})
     if rec.get("wholesale_price") in (None, ""):        # 도매가 = 필수 + 숫자
         errs.append({"row": row_index, "field": "도매가", "reason": "필수 값이 누락되었습니다"})
@@ -158,6 +177,15 @@ def _validate_into(cells: list, row_index: int, res: ParseResult, col: dict) -> 
             rec["retail_price"] = _to_int(rec["retail_price"])
         except (TypeError, ValueError):
             errs.append({"row": row_index, "field": "판매가", "reason": "숫자 형식이 아닙니다"})
+
+    # 색상·사이즈 = 필수(SKU 식별 + DB product_skus NOT NULL). 비면 검증 단계에서 오류로 잡아
+    # '검사 통과 → 커밋 시 NOT NULL 실패(0건 등록)' 불일치를 차단한다. 숫자 사이즈(95)는 텍스트로 정규화.
+    for fld, label in (("color", "색상"), ("size", "사이즈")):
+        v = rec.get(fld)
+        if v is None or not str(v).strip():
+            errs.append({"row": row_index, "field": label, "reason": "필수 값이 누락되었습니다"})
+        else:
+            rec[fld] = _text(v)
 
     # 선택 컬럼 — 재고(관대: 비숫자는 0, 행을 막지 않음), 혼용률(자유 텍스트)
     rec["stock"] = _to_int_lenient(rec.get("stock"))

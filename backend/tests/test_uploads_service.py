@@ -417,13 +417,27 @@ def test_preview_excel_dry_run(tmp_path):
     _make_xlsx(p, [
         ("1001", "셔츠", "화이트", "F", 12000, 29000),
         ("1001", "셔츠", "블랙", "F", 12000, 29000),     # 같은 (품번,상품명) 연속 → 한 상품
-        ("", "품번없음", "블랙", "F", 18000, ""),          # 품번 없음 → 폐기
+        ("", "노품번상품", "블랙", "F", 18000, ""),         # 품번 없지만 상품명 있음 → 이지머스 코드로 등록(드롭 X)
     ])
     out = preview_excel(str(p))
-    assert out["product_count"] == 1
-    assert out["sku_count"] == 2
-    assert out["dropped"] == 1
+    assert out["product_count"] == 2          # 1001 그룹 + 노품번 상품
+    assert out["sku_count"] == 3
+    assert out["dropped"] == 0
     assert out["errors"] == []
+
+
+def test_ingest_excel_blank_pnum_registers_with_platform_code(tmp_path):
+    # 품번 없지만 상품명 있는 행 → 이지머스 자체 품번(platform_code)으로 등록 (QA 3차 1p)
+    p = tmp_path / "noP.xlsx"
+    _make_xlsx(p, [("", "노품번원피스", "레드", "F", 18000, 36000)])
+    repo = FakeUploadRepo()
+    out = ingest_excel(repo, "w1", str(p))
+    assert len(out["products"]) == 1
+    prod = out["products"][0]
+    assert prod["source_p_number"] == prod["platform_code"]   # 품번 = 이지머스 코드
+    assert prod["platform_code"].startswith("EZM-")
+    assert out["dropped"] == 0
+    assert out["job"]["status"] == "needs_matching"
 
 
 def test_insert_errors_friendly_duplicate_message():
