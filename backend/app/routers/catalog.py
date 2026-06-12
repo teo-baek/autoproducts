@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Response
 from app.core.auth import get_current_user
 from app.core.config import get_settings
-from app.core.rbac import require_approved
+from app.core.rbac import require_approved, require_role
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.services.pricing import visible_price, visible_price_columns
@@ -65,6 +65,9 @@ def list_catalog(
     cursor: str | None = None,
 ):
     require_approved(user)  # 미승인 → 403 (FR-5.1 / AC-6)
+    # 보안(도매사↔도매사 격리): 카탈로그는 '셀러 쇼룸' 전용이다. wholesaler 가 호출하면 같은 테넌트의
+    # 타 도매사 상품·이미지(representative_image_url)가 노출된다 → 셀러 역할만 허용. admin 은 /admin/products 사용.
+    require_role("retail_seller", "agency")(user)
     sb = get_supabase()
     ids = scoped_wholesaler_ids(sb, user.manager_id)   # 뷰어 연계 도매관리자의 소속 도매만(FR-4)
     rows = _query_catalog_rows(sb, limit, cursor, wholesaler_ids=ids)
@@ -123,6 +126,7 @@ def _styled_export_rows(rows: list[dict], user: CurrentUser) -> list[dict]:
 def export_catalog(user: CurrentUser = Depends(get_current_user)):
     """폐쇄형 카탈로그 엑셀 출력(사진·QR 박은 A~J 스타일, FR-3). 가격은 역할별로 서버에서 셰이핑(FR-5.2)."""
     require_approved(user)
+    require_role("retail_seller", "agency")(user)  # 보안: 셀러 전용(도매사↔도매사 이미지 격리, list_catalog 과 동일)
     sb = get_supabase()
     ids = scoped_wholesaler_ids(sb, user.manager_id)   # 테넌트 스코프(FR-4)
     styled = _styled_export_rows(_query_catalog_export_rows(sb, _EXPORT_MAX, wholesaler_ids=ids), user)
