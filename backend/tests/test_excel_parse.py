@@ -75,25 +75,56 @@ def test_parse_alias_header(tmp_path):
     assert parsed.rows[0]["wholesale_price"] == 120000
 
 
-def test_parse_blank_pnum_is_dropped(tmp_path):
-    # 품번 없으면 (상품명이 있어도) 행을 폐기 — 오류 아님, dropped 로 집계 (사용자 정책)
+def test_parse_color_alias_kalra(tmp_path):
+    # 실데이터(20260608opn.xls): 색상 헤더가 '칼라', 상품명이 '품명', 품번은 전부 빈칸.
+    # '칼라'를 색상으로 인식 + 품번 없으면 이지머스 코드 등록 → 정상 파싱돼야 한다.
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "품명", "칼라", "사이즈", "입고가", "도매가", "소매가"])
+    ws.append(["", "레이온타이나시BL", "소라", "FREE", 0, 14000, 0])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert len(parsed.rows) == 1
+    r = parsed.rows[0]
+    assert r["color"] == "소라"
+    assert r["item_name"] == "레이온타이나시BL"
+    assert r["wholesale_price"] == 14000          # 입고가(0) 아닌 도매가(14000) 선택
+    assert r["source_p_number"] is None           # 품번 없음 → 이지머스 코드 대상
+
+
+def test_parse_blank_pnum_with_name_kept_for_auto_code(tmp_path):
+    # 품번 없지만 상품명 있으면 → 폐기 X. 진짜 상품으로 보고 '이지머스 자체 품번'으로 등록(QA 3차 1p).
+    # 파서는 source_p_number=None 마커만 남기고(ingest 가 platform_code 로 채움), 오류·드롭 아님.
     p = _make_xlsx(tmp_path, [["", "프릴리OPS", "블랙", "F", "18000", ""]])
     parsed = parse_template_rows(str(p))
-    assert parsed.rows == []
-    assert parsed.errors == []        # 에러로 잡지 않음
-    assert parsed.dropped == 1
+    assert parsed.dropped == 0
+    assert parsed.errors == []
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0]["source_p_number"] is None     # 이지머스 코드 부여 대상 마커
+    assert parsed.rows[0]["item_name"] == "프릴리OPS"
 
 
-def test_parse_blank_pnum_dropped_keeps_valid_rows(tmp_path):
-    # 품번 없는 행만 버리고 정상 행은 유지
-    p = _make_xlsx(tmp_path, [
-        ["1001", "셔츠", "화이트", "F", "12000", "29000"],
-        ["", "품번없음", "블랙", "F", "18000", ""],
-    ])
+def test_parse_blank_pnum_no_name_dropped(tmp_path):
+    # 품번·상품명 둘 다 없는 행(POS 합계/소계 잡행) → 조용히 폐기(dropped, 오류 아님)
+    p = _make_xlsx(tmp_path, [["", "", "", "", "999000", ""]])
     parsed = parse_template_rows(str(p))
-    assert len(parsed.rows) == 1 and parsed.rows[0]["source_p_number"] == "1001"
+    assert parsed.rows == []
     assert parsed.dropped == 1
     assert parsed.errors == []
+
+
+def test_parse_blank_pnum_with_name_registers_alongside_valid(tmp_path):
+    # 품번 있는 행 + 품번 없지만 상품명 있는 행 → 둘 다 등록 대상(후자는 이지머스 코드)
+    p = _make_xlsx(tmp_path, [
+        ["1001", "셔츠", "화이트", "F", "12000", "29000"],
+        ["", "품번없음상품", "블랙", "F", "18000", ""],
+    ])
+    parsed = parse_template_rows(str(p))
+    assert parsed.dropped == 0 and parsed.errors == []
+    assert len(parsed.rows) == 2
+    assert parsed.rows[0]["source_p_number"] == "1001"
+    assert parsed.rows[1]["source_p_number"] is None     # 이지머스 코드 부여 대상
 
 
 def test_parse_xls_valid(tmp_path):
@@ -133,6 +164,46 @@ def test_parse_missing_item_name_reports_field(tmp_path):
     parsed = parse_template_rows(str(p))
     fields = {e["field"] for e in parsed.errors}
     assert "상품명" in fields
+
+
+def test_parse_blank_color_is_error(tmp_path):
+    # 색상 빈칸 → 검증 오류(필드 '색상'). DB product_skus.color NOT NULL 과 일치시켜 커밋 실패를 사전 차단.
+    p = _make_xlsx(tmp_path, [["1001", "셔츠", "", "F", "12000", "29000"]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.rows == []                       # 누락 행은 등록 대상에서 제외
+    assert "색상" in {e["field"] for e in parsed.errors}
+    assert parsed.errors[0]["reason"] == "필수 값이 누락되었습니다"
+
+
+def test_parse_blank_size_is_error(tmp_path):
+    # 사이즈 빈칸 → 검증 오류(필드 '사이즈')
+    p = _make_xlsx(tmp_path, [["1001", "셔츠", "화이트", "", "12000", "29000"]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.rows == []
+    assert "사이즈" in {e["field"] for e in parsed.errors}
+
+
+def test_parse_numeric_size_normalized_to_text(tmp_path):
+    # 숫자 사이즈(95)는 '95' 텍스트로 정규화 — '95.0' 부동소수 잔재 방지(TEXT 컬럼 안전)
+    p = _make_xls(tmp_path, [["2001", "팬츠", "네이비", 95, 50000, 99000]])
+    parsed = parse_template_rows(str(p))
+    assert parsed.errors == []
+    assert parsed.rows[0]["size"] == "95"
+
+
+def test_parse_missing_color_size_column_reports_row_errors(tmp_path):
+    # 색상·사이즈 컬럼이 아예 없어도 '파일 자체를 막지 않고', 행별로 '색상/사이즈 누락'을
+    # 검증 표(errors)에 보여준다 — 어디가 빠졌는지 정확히(사용자 피드백).
+    p = tmp_path / "t.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["품번", "상품명", "도매가", "판매가"])      # 색상/사이즈 없음
+    ws.append(["1001", "셔츠", "12000", "29000"])
+    wb.save(p)
+    parsed = parse_template_rows(str(p))                 # 예외 없이 통과
+    fields = {e["field"] for e in parsed.errors}
+    assert "색상" in fields and "사이즈" in fields
+    assert parsed.rows == []                             # 등록 대상엔 안 들어감
+    assert all(e["row"] == 2 for e in parsed.errors)     # 해당 행 번호로 표에 표시
 
 
 def test_parse_blank_trailing_row_skipped(tmp_path):

@@ -136,11 +136,13 @@ def ingest_excel(repo, wholesaler_id: str, parse_path: str,
     for g in groups:
         product = None
         try:
+            code = repo.next_platform_code()
             product = repo.insert_product({
                 "wholesaler_id": wholesaler_id,
                 "created_by": created_by,
-                "platform_code": repo.next_platform_code(),
-                "source_p_number": g["source_p_number"],
+                "platform_code": code,
+                # 품번 없는 행(엑셀에 품번이 없는 상품)은 이지머스 자체 품번(platform_code)으로 등록 (QA 3차 1p)
+                "source_p_number": g["source_p_number"] or code,
                 "item_name": g["item_name"],
                 "fabric_composition": g.get("fabric_composition"),
             })
