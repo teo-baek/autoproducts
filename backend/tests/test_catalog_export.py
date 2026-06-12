@@ -86,3 +86,25 @@ def test_export_route_blocks_unapproved(monkeypatch):
         assert res.status_code == 403   # 미승인 → 차단 (FR-5.1)
     finally:
         app.dependency_overrides.clear()
+
+
+def test_catalog_list_blocks_wholesaler():
+    """도매사↔도매사 격리: wholesaler 는 셀러용 카탈로그를 볼 수 없다 — 같은 테넌트 타 도매사 상품·이미지 노출 차단."""
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id="w", role="wholesaler", status="approved", wholesaler_id="org-A")
+    try:
+        res = TestClient(app).get("/catalog")
+        assert res.status_code == 403   # 셀러 전용 — 도매사 차단
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_route_blocks_wholesaler():
+    """엑셀 출력도 동일 격리 — wholesaler 가 호출하면 타 도매사 이미지 바이트가 새어나가므로 차단."""
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id="w", role="wholesaler", status="approved", wholesaler_id="org-A")
+    try:
+        res = TestClient(app).get("/catalog/export.xlsx")
+        assert res.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
