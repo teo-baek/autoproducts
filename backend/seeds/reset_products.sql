@@ -55,8 +55,8 @@ COMMIT;
 
 -- ── §3. (선택) Storage 실제 이미지 파일 정리 ──────────────────────────────────────
 -- §1 은 DB 의 이미지 "기록"만 지운다. 버킷에 업로드된 실제 사진 파일은 남는다.
--- 완전히 비우려면 대시보드 Storage 에서 product-images 버킷을 "Empty bucket" 하거나 아래 실행:
--- DELETE FROM storage.objects WHERE bucket_id = 'product-images';
+-- 파일은 GCS 버킷에 있음(Supabase Storage 아님). 완전히 비우려면 gsutil 로:
+--   gsutil -m rm -r gs://ezmerce-product-images/**
 
 
 -- ── (대안) 하드 삭제가 부담되면: soft delete 로 "내리기"만 ─────────────────────────

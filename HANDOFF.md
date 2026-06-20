@@ -1,5 +1,6 @@
 # HANDOFF — ezmerce v2 백엔드 (1차)
 
+> ✅ **Supabase Storage → GCS 이전 완료 (2026-06-15)** → [HANDOFF-gcs-storage-migration.md](HANDOFF-gcs-storage-migration.md). Storage 만 GCS(DB/Auth=Supabase 유지), 프론트는 백엔드 발급 서명 URL 로 업로드. 검증 **203 passed**. **다음 세션 후속 = 업로드 속도 최적화**(서명 creds 캐시 + bulk 병렬화).
 > 🔭 **다음 작업 = 리스크 감사 HIGH 처리** → [HANDOFF-audit-high-fixes.md](HANDOFF-audit-high-fixes.md). 리포트 `docs/audit/2026-06-06-221326-audit-risk.html` 의 High 12건 중 1건(export 루프)은 Critical 수정 때 해소, 남은 11건을 3클러스터(A 트랜잭션·B PII·C 인젝션/성능)로 정리. ✅ **Critical(export 이미지 N+1)은 처리 완료**(썸네일 우선+TTL 캐시, 백엔드 150 passed).
 > ✅ **카탈로그/상품 엑셀 "출력물" 렌더(사진·QR 박은 A~K 스타일, jinsup 예시 `방송제품목록.xlsx`와 동일) 완료(2026-06-06, 백엔드 138 passed)** → [HANDOFF-excel-export-render.md](HANDOFF-excel-export-render.md). `build_render_xlsx`(`excel_export.py`) + `visible_price_columns`(`pricing.py`), `/products/export.xlsx`(관리뷰=도매가+판매가)·`/catalog/export.xlsx`(역할별 셰이핑) 둘 다 전환. 결정: **A~K 11열**(A 사진·…·I 재고·**J P CODE**·**K QR 링크**), **SKU당 1행·병합 없이 매 행 반복**(사진/QR도 매 행), **역할별 visible_price 셰이핑**(P CODE=`도매//1000_소매//1000`은 도매가·판매가 둘 다 보일 때만 → 셀러 카탈로그엔 빈칸, 가격 유출 방지), 도매가/판매가=숫자+`#,##0` 콤마서식.
 > ✅ **상품등록 엑셀/이미지 파이프라인 고도화 완료(2026-06-06, 백엔드 131 passed)** → [HANDOFF-product-pipeline-upgrade.md](HANDOFF-product-pipeline-upgrade.md). 사용자 액션: 마이그레이션 **`_08`·`_09`** 실행 + `product-images` 버킷(공개) 생성.
@@ -9,7 +10,7 @@
 
 ## 🎯 Goal
 **ezmerce** = 폐쇄형 B2B 도매 카탈로그·주문 솔루션 (고객: **LALAS** 동대문 도매상인연합).
-1차 백엔드 = **FastAPI + Supabase(Postgres/Auth/Storage)**. 범위: 상품등록·엑셀출력·QR + 역할기반 폐쇄형 카탈로그(가격 차등 노출).
+1차 백엔드 = **FastAPI + Supabase(Postgres/Auth)** + **GCS(파일 저장소, 2026-06-15 Supabase Storage 에서 이전)**. 범위: 상품등록·엑셀출력·QR + 역할기반 폐쇄형 카탈로그(가격 차등 노출).
 설계/계획/변경이력 문서: `docs/features/2026-06-03-ezmerce-v2-backend/` (requirements / tech-design / implementation-plan + ERD/overview HTML).
 프로젝트 규칙: 루트 **`CLAUDE.md`** (DB 삭제 정책·레이어 규칙 등 — 꼭 읽기).
 

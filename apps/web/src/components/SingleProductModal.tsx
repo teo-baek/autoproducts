@@ -11,13 +11,7 @@ import {
   uploadProductImage,
   type Product,
 } from "@/lib/products";
-import {
-  Alert,
-  Button,
-  Dialog,
-  NumberField,
-  TextField,
-} from "@/components/ui";
+import { Button, Dialog, NumberField, TextField } from "@/components/ui";
 import { ImageIcon, Plus, Pencil } from "@/components/icons";
 
 type Props = {
@@ -144,6 +138,12 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
       title={isEdit ? "상품 정보 수정" : "단일 상품 등록"}
       footer={
         <>
+          {/* 경고는 등록 버튼 옆(고정 푸터)에 — 본문 맨 위면 스크롤해야 보여서 옮김 */}
+          {error && (
+            <p className="mr-auto max-w-[60%] text-left text-sm font-medium text-[var(--color-danger-fg)]">
+              {error}
+            </p>
+          )}
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             취소
           </Button>
@@ -153,11 +153,6 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
         </>
       }
     >
-      {error && (
-        <div className="mb-5">
-          <Alert>{error}</Alert>
-        </div>
-      )}
       <div className="grid gap-8 md:grid-cols-[1fr_18rem]">
         {/* 좌: 입력 */}
         <div className="space-y-6">
@@ -224,7 +219,8 @@ export function SingleProductModal({ open, onClose, onSaved, wholesalerId, editi
               label="재고"
               placeholder="0"
               value={stock}
-              onChange={(e) => setStock(e.target.value)}
+              inputMode="numeric"
+              onChange={(e) => setStock(e.target.value.replace(/[^0-9]/g, ""))}
             />
             <p className="text-xs text-muted-foreground">
               색상·사이즈를 콤마로 여러 개 입력하면 조합별 SKU가 자동 생성됩니다. (가격·재고는 조합 공통)

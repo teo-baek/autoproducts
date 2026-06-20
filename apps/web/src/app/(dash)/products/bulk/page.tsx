@@ -30,6 +30,9 @@ import {
 const STEPS = ["파일 업로드", "이미지 업로드", "데이터 검증", "등록 완료"];
 const MAX_ZIP_MB = 100; // 서버 uploads.py _ZIP_MAX_BYTES 와 일치(운영 512Mi 메모리 보호)
 const MAX_ZIP_BYTES = MAX_ZIP_MB * 1024 * 1024;
+// 개별 이미지 업로드 동시 실행 수. 서명(/uploads/sign)+GCS PUT 2홉 지연을 이미지 간 겹쳐 대량 업로드 가속.
+// 브라우저 호스트당 커넥션 한도(~6)·백엔드 signBlob 레이트 고려해 보수적으로 5(>8 금지).
+const UPLOAD_CONCURRENCY = 5;
 
 type ImgItem = {
   file: File;
@@ -132,20 +135,29 @@ export default function BulkPage() {
       })),
     ]);
 
-    // 개별 이미지 → 스토리지 직접 업로드 (매니페스트는 commit 때 합침)
-    for (let i = 0; i < imgs.length; i++) {
-      const f = imgs[i];
-      const idx = start + i;
-      try {
-        // 저장 키는 ASCII(인덱스)만 — 한글 파일명은 매니페스트 original_filename 으로 따로 전달(매칭용)
-        const { storage_path } = await uploadProductImage(f, wid, `bulk/${stamp}-${i}`);
-        setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "done", storage_path } : it)));
-      } catch (e) {
-        setImgFailed(true);
-        setImgErrMsg(e instanceof Error ? e.message : null);
-        setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "error" } : it)));
+    // 개별 이미지 → 스토리지 직접 업로드 (매니페스트는 commit 때 합침).
+    // 동시성 제한 워커풀: cursor 를 N개 워커가 소비. cursor++ 는 await 이전이라 원자적 → 워커 간 인덱스 중복 없음.
+    // 인덱스(idx=start+i)·키(`bulk/${stamp}-${i}`)·상태/에러 처리는 기존 순차 루프와 동일하게 보존.
+    let cursor = 0;
+    const uploadWorker = async () => {
+      while (cursor < imgs.length) {
+        const i = cursor++; // 이 워커가 맡을 이미지 인덱스 선점
+        const f = imgs[i];
+        const idx = start + i;
+        try {
+          // 저장 키는 ASCII(인덱스)만 — 한글 파일명은 매니페스트 original_filename 으로 따로 전달(매칭용)
+          const { storage_path } = await uploadProductImage(f, wid, `bulk/${stamp}-${i}`);
+          setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "done", storage_path } : it)));
+        } catch (e) {
+          setImgFailed(true);
+          setImgErrMsg(e instanceof Error ? e.message : null);
+          setImages((prev) => prev.map((it, j) => (j === idx ? { ...it, status: "error" } : it)));
+        }
       }
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(UPLOAD_CONCURRENCY, imgs.length) }, () => uploadWorker())
+    );
 
     // ZIP → Storage staging(압축해제+썸네일). 등록/매칭은 commit 때. 진행률 표시.
     for (let z = 0; z < zips.length; z++) {
@@ -465,19 +477,7 @@ function StepImage({
         </div>
       )}
 
-      {images.length > 0 && (
-        <div className="mt-6">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Currently Uploaded ({images.length})
-          </div>
-          <div className="space-y-2.5">
-            {images.map((im, i) => (
-              <ImageRow key={`${im.name}-${i}`} im={im} onRemove={() => onRemove(i)} />
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* 액션 바 — 업로드 목록 '위'에 고정. 목록이 길어져도 버튼이 바닥으로 밀리지 않음(아래 목록은 내부 스크롤). */}
       <div className="mt-7 flex items-center justify-end gap-3 border-t border-divider pt-5">
         <Button variant="secondary" onClick={onBack}>
           이전으로
@@ -486,6 +486,20 @@ function StepImage({
           {busy ? "업로드 중…" : "다음 단계로"}
         </Button>
       </div>
+
+      {images.length > 0 && (
+        <div className="mt-6">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Currently Uploaded ({images.length})
+          </div>
+          {/* 이미지가 많아도 카드 목록은 내부 스크롤 — 위 액션 바를 아래로 밀어내지 않게 최대 높이 제한. */}
+          <div className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+            {images.map((im, i) => (
+              <ImageRow key={`${im.name}-${i}`} im={im} onRemove={() => onRemove(i)} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

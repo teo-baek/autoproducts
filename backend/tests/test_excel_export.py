@@ -113,31 +113,20 @@ def test_cell_image_path_prefers_thumbnail():
     assert cell_image_path(None) is None
 
 
-class _FakeStorage:
-    def __init__(self, data):
-        self.data = data
-        self.calls = 0
-    def from_(self, _bucket):
-        return self
-    def download(self, _path):
-        self.calls += 1
-        return self.data
-
-
-class _FakeSB:
-    def __init__(self, data):
-        self.storage = _FakeStorage(data)
-
-
-def test_cell_image_bytes_caches_by_path():
+def test_cell_image_bytes_caches_by_path(monkeypatch):
     buf = io.BytesIO(); PILImage.new("RGB", (20, 20), "red").save(buf, format="PNG")
-    sb = _FakeSB(buf.getvalue())
+    raw = buf.getvalue()
+    calls = {"n": 0}
+    def _fake_download(_bucket, _path):    # GCS 다운로드 모킹(인터페이스: bucket, path)
+        calls["n"] += 1
+        return raw
+    monkeypatch.setattr("app.services.excel_export.gcs.download_bytes", _fake_download)
     path = "w/cache-test-unique-987.jpg"   # 전역 캐시 충돌 방지용 고유 경로
-    a = cell_image_bytes(sb, path)
-    b = cell_image_bytes(sb, path)
+    a = cell_image_bytes(path)
+    b = cell_image_bytes(path)
     assert a and b and a == b
-    assert sb.storage.calls == 1           # 두 번째는 TTL 캐시 → 재다운로드 안 함
+    assert calls["n"] == 1                 # 두 번째는 TTL 캐시 → 재다운로드 안 함
 
 
 def test_cell_image_bytes_none_path():
-    assert cell_image_bytes(_FakeSB(b""), None) is None
+    assert cell_image_bytes(None) is None

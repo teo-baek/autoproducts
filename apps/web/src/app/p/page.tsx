@@ -142,7 +142,7 @@ function Card({ card }: { card: PublicCard }) {
       {/* 히어로 — 인스타 4:5 */}
       <div className="relative aspect-[4/5] w-full bg-subtle">
         {card.representative_image_url ? (
-          // 외부(Supabase Storage) 공개 URL → next/image 원격 설정 불필요한 plain img.
+          // 외부(GCS) 공개 URL → next/image 원격 설정 불필요한 plain img.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={card.representative_image_url}

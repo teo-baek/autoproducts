@@ -2,6 +2,7 @@
 
 대량 업로드는 product_images 에만 사진을 기록(대표 URL 비어있음) → 공개 카드에서도 보여야 함.
 """
+from app.core.config import get_settings
 from app.routers.public import _pick_image, _public_image_url, shape_card_skus, build_card
 from app.schemas.auth import CurrentUser
 
@@ -24,7 +25,7 @@ def test_pick_image_falls_back_to_product_images_representative_first():
     }
     url = _pick_image(row)
     assert url is not None
-    assert url.endswith("/product-images/w/staging/rep.jpg")  # 대표 먼저 선택
+    assert url == f"{get_settings().gcs_public_base_url.rstrip('/')}/w/staging/rep.jpg"  # 대표 먼저 선택
 
 
 def test_pick_image_skips_soft_deleted_and_empty():
@@ -37,9 +38,8 @@ def test_pick_image_skips_soft_deleted_and_empty():
 
 
 def test_public_image_url_shape():
-    assert _public_image_url("w/staging/x.jpg").endswith(
-        "/storage/v1/object/public/product-images/w/staging/x.jpg"
-    )
+    base = get_settings().gcs_public_base_url.rstrip("/")
+    assert _public_image_url("w/staging/x.jpg") == f"{base}/w/staging/x.jpg"
 
 
 # ── 로그인 뷰어 카드 옵션(색상/사이즈/재고 + 역할별 가격) ─────────────────────

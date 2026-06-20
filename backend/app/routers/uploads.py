@@ -5,8 +5,11 @@ from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
+from app.core import gcs
 from app.core.auth import get_current_user
+from app.core.config import get_settings
 from app.core.rbac import require_approved, require_role
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
@@ -75,14 +78,13 @@ class SupabaseUploadRepo:
                 return self.sb.table("product_images").insert(stripped).execute().data
             raise
 
-    # ── Storage(이미지 가공용) ── service key 라 RLS 우회; 경로는 도매 스코프로 프론트가 생성 ──
-    def download_object(self, path, bucket="product-images"):
-        return self.sb.storage.from_(bucket).download(path)   # bytes
+    # ── Storage(이미지 가공용) ── GCS. 경로는 도매 스코프({wid}/...)로 프론트/서버가 생성 ──
+    def download_object(self, path, bucket=None):
+        return gcs.download_bytes(bucket or get_settings().gcs_product_bucket, path)   # bytes
 
-    def upload_object(self, path, data, bucket="product-images", content_type="image/jpeg"):
-        # 재가공/재업로드 멱등 위해 upsert. supabase-py file_options 값은 문자열.
-        self.sb.storage.from_(bucket).upload(
-            path, data, {"content-type": content_type, "upsert": "true"})
+    def upload_object(self, path, data, bucket=None, content_type="image/jpeg"):
+        # 동일 경로 재업로드 = 덮어쓰기(멱등). 썸네일/staging 서버측 쓰기.
+        gcs.upload_bytes(bucket or get_settings().gcs_product_bucket, path, data, content_type)
         return path
 
     def list_unmatched_images(self, wid):
@@ -159,6 +161,31 @@ async def stage_zip(file: UploadFile = File(...), user: CurrentUser = Depends(ge
     except Exception:
         log.exception("ZIP staging 실패 wid=%s", user.wholesaler_id)
         raise HTTPException(400, "ZIP 처리 중 오류가 발생했습니다. 파일을 확인해주세요.")
+
+
+class SignUploadReq(BaseModel):
+    object_key: str                    # 도매 스코프 내부 상대 경로(확장자 포함). 예: "bulk/1736-0.jpg"
+    content_type: str = "application/octet-stream"
+
+
+@router.post("/sign")
+def sign_upload(req: SignUploadReq, user: CurrentUser = Depends(get_current_user)):
+    """프론트 직접 업로드용 V4 signed PUT URL 발급(GCS). 경로는 도매 스코프({wid}/…)로 서버가 강제 → IDOR 차단.
+
+    브라우저는 받은 upload_url 로 **동일 content_type** 헤더를 달아 PUT 한 뒤, storage_path 를 매니페스트/대표URL에 싣는다.
+    """
+    _guard(user)
+    key = req.object_key.strip().lstrip("/")
+    if not key or ".." in key:
+        raise HTTPException(400, "잘못된 업로드 경로입니다.")
+    path = f"{user.wholesaler_id}/{key}"
+    try:
+        url = gcs.signed_put_url(get_settings().gcs_product_bucket, path, req.content_type)
+    except Exception:
+        log.exception("서명 URL 발급 실패 wid=%s", user.wholesaler_id)
+        raise HTTPException(500, "업로드 URL 발급에 실패했습니다.")
+    return {"upload_url": url, "storage_path": path,
+            "public_url": gcs.public_url(path), "content_type": req.content_type}
 
 
 @router.post("/commit")

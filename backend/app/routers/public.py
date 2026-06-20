@@ -7,7 +7,7 @@ from app.schemas.auth import CurrentUser
 from app.services.images import public_image_url as _public_image_url, representative_image_url
 from app.services.pricing import visible_price
 from app.services.qr import qr_target_url, generate_qr_png
-from app.services.tenancy import scoped_wholesaler_ids
+from app.services.customers import seller_visible_wholesaler_ids
 
 router = APIRouter(tags=["public"])
 
@@ -59,8 +59,9 @@ def product_card(
     row = res.data if res else None
     if not row:
         raise HTTPException(404, "not found")
-    # 테넌트 스코프(FR-4): 로그인 셀러는 자신이 연계된 도매관리자의 소속 도매 상품에만 가격/재고 노출.
-    scoped = scoped_wholesaler_ids(sb, viewer.manager_id) if viewer else []
+    # 테넌트 스코프 + 정책 강제: 로그인 셀러는 '연계 테넌트 도매 − 자기가 취소한 도매' 상품에만 가격/재고 노출.
+    # 취소한 도매의 상품은 QR 카드에서도 가격/재고 1도 안 보임(쇼룸·엑셀과 동일).
+    scoped = seller_visible_wholesaler_ids(sb, viewer.manager_id, viewer.id) if viewer else []
     return build_card(row, viewer, scoped)
 
 

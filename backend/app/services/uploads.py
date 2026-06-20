@@ -1,7 +1,7 @@
 """업로드 오케스트레이션 — 표준 엑셀 → 상품 일괄생성, 이미지 파일명 자동매칭.
 
-이미지는 '프론트 직접 Storage' 모델: 프론트가 product-images 버킷에 직접 업로드한 뒤
-{original_filename, storage_path} 매니페스트를 백엔드로 보내면, 백엔드가 품번 매칭 + 기록만 한다.
+이미지는 '프론트 직접 업로드' 모델: 프론트가 백엔드 발급 V4 signed PUT URL(POST /uploads/sign)로
+GCS 에 직접 업로드한 뒤 {original_filename, storage_path} 매니페스트를 백엔드로 보내면, 백엔드가 품번 매칭 + 기록만 한다.
 엑셀은 데이터 파일이라 multipart 로 받아 서버에서 파싱한다.
 
 보안: 백엔드는 service key 로 접속(RLS 우회)하므로, 도매업체 격리는 **앱 레이어에서** 강제한다.

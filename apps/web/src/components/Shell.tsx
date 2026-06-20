@@ -8,9 +8,7 @@ import { LogoutDialog } from "./LogoutDialog";
 import { useSearch } from "./SearchProvider";
 import {
   Bell,
-  Book,
   Box,
-  Cart,
   Dashboard,
   Help,
   LogOut,
@@ -21,12 +19,11 @@ import {
 
 type NavItem = { href: string; label: string; icon: typeof Box };
 
+// 1차 범위: 주문 관리·카탈로그 관리는 후순위(Phase 2)라 메뉴에서 숨김(라우트/페이지는 보존).
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "대시보드", icon: Dashboard },
   { href: "/products", label: "상품 관리", icon: Box },
   { href: "/customers", label: "고객 관리", icon: Users },
-  { href: "/orders", label: "주문 관리", icon: Cart },
-  { href: "/catalog", label: "카탈로그 관리", icon: Book },
 ];
 
 /**
@@ -124,14 +121,7 @@ export function Shell({ children }: { children: ReactNode }) {
             >
               <Bell width={20} height={20} />
             </button>
-            <span className="h-6 w-px bg-divider" />
-            <button
-              type="button"
-              title="POS — 준비 중 (Phase 2)"
-              className="rounded-[var(--radius)] bg-ink px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-strong"
-            >
-              POS
-            </button>
+            {/* POS 버튼은 1차 후순위(Phase 2)라 숨김 */}
           </div>
         </header>
 

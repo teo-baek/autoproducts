@@ -15,13 +15,17 @@ Supabase **SQL Editor**에 아래 파일들을 **순서대로** 붙여넣어 실
 8. `2026-06-06_v2_core_08_image_thumbnail.sql` — `product_images.thumbnail_path`. 서버측 이미지 가공(EXIF 보정+웹 리사이즈) 산출물 경로. NULL=미가공→원본 폴백. **(이미지 업로드 가공 파이프라인에 필요)**
 9. `2026-06-06_v2_core_09_pnum_not_unique.sql` — **품번 유일성 제거**. POS 품번은 유일키 아님(같은 품번이 서로 다른 상품일 수 있음) → `(도매,품번)` 부분 유니크 인덱스 드롭 + 비유일 lookup 인덱스. 영구 식별자는 `platform_code`. **(같은 품번의 서로 다른 상품 등록·대량업로드에 필요)**
 10. `2026-06-09_v2_core_10_wholesale_manager_tenancy.sql` — **도매관리자(도매연합) 멀티테넌트 1차**. 테넌트 테이블 `wholesale_managers` + 도매상 소속 연결표 `manager_wholesalers`(단일 칸 금지 — n:m forward-compat, 도매상당 살아있는 1행 부분 unique) + `profiles.manager_id`(셀러/admin 연계) + `set_updated_at`/soft-cascade 트리거 + RLS deny + **LALAS 시드 + 기존 admin 계정(`rythmn@naver.com`, id `f50945ce…`) 연결 + backfill(기존 도매·셀러를 전부 LALAS 에 묶음)**. ⚠️ **backfill 포함 1회 실행** — 누락 시 카탈로그가 빈 결과(fail-closed)로 회귀. **(도매관리자 대시보드 합산 상품관리 + 카탈로그 테넌트 스코핑에 필요)**
+11. `2026-06-11_v2_core_11_manager_rejections.sql` — **관리자별 거절(패스) 로그** `manager_rejections`. 도매관리자가 거절한 신청자를 자기 대기 풀에서만 제외(전역 거절 아님 — 다른 관리자에겐 계속 pending). **(가입 승인 화면의 거절 동작에 필요)**
+12. `2026-06-20_v2_core_12_customer_assignment_tier.sql` — **고객관리 — 소매↔도매 매칭 취소(예외) + 등급(잠자는 상태)**. 모델 = 테넌트 안 모든 소매↔도매 **기본 연결**, 관리자가 특정 쌍을 **취소**. 취소된 쌍만 `wholesaler_customer_exclusions`(`(도매,소매)` 살아있는 쌍 부분 unique)에 기록 — 빈 표 = 모두 연결. + `profiles.tier`(`new`/`regular`, 1차 화면 제외·2차 자동등급용 보존) + `set_updated_at` 트리거 + RLS deny. 프리런치 — 백필 없음. **(고객관리: 도매=테넌트 소매−취소분, 도매관리자=도매+소매 전체·취소에 필요)**
 
-## Storage 버킷 (대시보드 또는 SQL)
-- **`product-images`** — 상품 이미지 업로드용. **공개(public) 권장**(상품 사진은 카탈로그 노출이 목적). 프론트가 직접 업로드 → `representative_image_url`(public URL) 저장 + 매니페스트 매칭. 미생성 시 단일/대량 등록의 이미지 업로드만 실패(상품 데이터 등록은 정상).
-  - 대시보드: Storage → New bucket → name `product-images`, Public ✓.
+## Storage 버킷 (Google Cloud Storage — Supabase Storage 아님)
+⚠️ 2026-06-15 이후 파일 저장소는 **GCS** (DB/Auth 만 Supabase). 버킷은 gsutil/gcloud 로 생성(대시보드 X). `storage.buckets` INSERT(마이그레이션 06)·`storage.objects` 는 레거시 — GCS 와 무관.
+- **`ezmerce-product-images`** (공개 read) — 상품 이미지. 프론트는 백엔드 `POST /uploads/sign` 으로 V4 signed PUT URL 을 받아 GCS 에 직접 업로드 → `representative_image_url`(GCS 공개 URL) 저장 + 매니페스트 매칭.
+- **`ezmerce-business-docs`** (비공개·공개차단) — 가입 서류(PII), 서비스계정 전용.
+- 생성/IAM/CORS/키리스 서명(런타임 SA + signBlob) 명령: `docs/features/2026-06-15-supabase-storage-to-gcs/` Phase A 참고.
 
 ## 주의
 - `_RESET_public.sql`은 **비가역**(데이터 영구 삭제). 올바른 프로젝트인지 확인 후 실행.
 - 1~4는 리셋 후 깨끗한 public 위에서 순서대로 실행하면 충돌 없이 끝납니다.
-- `auth.users`(로그인 계정)와 storage 버킷/이미지는 reset이 건드리지 않음.
+- `auth.users`(로그인 계정)는 reset이 건드리지 않음. 이미지/서류는 **GCS 버킷**(별개 — Supabase reset 과 무관).
 - 적용 후: 백엔드는 `backend/.env`(SUPABASE_URL + SUPABASE_SERVICE_KEY)로 접속. JWT는 JWKS 공개키로 검증.

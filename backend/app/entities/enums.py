@@ -43,3 +43,9 @@ class PriceVisibility(str, Enum):
     wholesale = "wholesale"
     retail = "retail"
     none = "none"
+
+
+class CustomerTier(str, Enum):
+    """소매(거래처) 등급 — 관리자/도매가 수동 지정. null = 신규(new) 취급. 1차엔 가격 영향 없음."""
+    new = "new"          # 신규
+    regular = "regular"  # 일반

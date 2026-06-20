@@ -6,8 +6,8 @@ from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser
 from app.services.pricing import visible_price, visible_price_columns
 from app.services.excel_export import build_render_xlsx, cell_image_bytes, cell_image_path, price_code
+from app.services.customers import seller_visible_wholesaler_ids
 from app.services.images import representative_image_url, storage_path_from_public_url
-from app.services.tenancy import scoped_wholesaler_ids
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -69,7 +69,8 @@ def list_catalog(
     # 타 도매사 상품·이미지(representative_image_url)가 노출된다 → 셀러 역할만 허용. admin 은 /admin/products 사용.
     require_role("retail_seller", "agency")(user)
     sb = get_supabase()
-    ids = scoped_wholesaler_ids(sb, user.manager_id)   # 뷰어 연계 도매관리자의 소속 도매만(FR-4)
+    # 정책 강제: 테넌트 도매 − 이 소매가 '취소'한 도매. 취소한 도매의 상품은 쇼룸에서 1도 안 보임.
+    ids = seller_visible_wholesaler_ids(sb, user.manager_id, user.id)
     rows = _query_catalog_rows(sb, limit, cursor, wholesaler_ids=ids)
     return {"items": [shape_catalog_item(_normalize(r), user) for r in rows]}
 
@@ -128,11 +129,12 @@ def export_catalog(user: CurrentUser = Depends(get_current_user)):
     require_approved(user)
     require_role("retail_seller", "agency")(user)  # 보안: 셀러 전용(도매사↔도매사 이미지 격리, list_catalog 과 동일)
     sb = get_supabase()
-    ids = scoped_wholesaler_ids(sb, user.manager_id)   # 테넌트 스코프(FR-4)
+    # 정책 강제: 쇼룸과 동일 — 취소한 도매 상품은 엑셀에서도 1도 안 나옴(CLAUDE.md §가격노출 동일 적용).
+    ids = seller_visible_wholesaler_ids(sb, user.manager_id, user.id)
     styled = _styled_export_rows(_query_catalog_export_rows(sb, _EXPORT_MAX, wholesaler_ids=ids), user)
     for x in styled:                       # 한 장씩 다운로드→축소(대량 OOM 방지)
         sp = x.pop("_storage_path")
-        x["image_bytes"] = cell_image_bytes(sb, sp) if sp else None
+        x["image_bytes"] = cell_image_bytes(sp) if sp else None
     data = build_render_xlsx(styled, base_url=get_settings().public_base_url)  # K=QR 링크 텍스트, L=QR 이미지
     return Response(
         content=data,

@@ -90,11 +90,17 @@ docker run --rm -p 8080:8080 \
 | `SUPABASE_SERVICE_KEY` | **예 → Secret Manager** | service_role 키. RLS 우회 → 절대 이미지/깃에 굽지 말 것 |
 | `PUBLIC_BASE_URL` | 아니오 | 공개 QR 카드(`/p/{code}`) URL prefix |
 | `PLATFORM_CODE_PREFIX` | 아니오 | 기본 `EZM` |
+| `GCS_PROJECT` | 아니오 | 파일 저장소 GCP 프로젝트(= `GCP_PROJECT`) |
+| `GCS_PRODUCT_BUCKET` | 아니오 | 공개 버킷(상품 이미지) |
+| `GCS_DOC_BUCKET` | 아니오 | 비공개 버킷(가입 서류 PII) |
+| `GCS_PUBLIC_BASE` | 아니오 | 공개 이미지 URL prefix(`storage.googleapis.com/<버킷>`) |
+| `GCS_SIGNING_SA` | 아니오 | 키리스 V4 서명용 런타임 SA(signBlob) |
 | `SUPABASE_JWT_SECRET` | (레거시) | HS256 잔재. JWKS 사용 시 불필요 |
 
 ## ⚠️ 운영 전 반드시
-- **CORS**: `app/main.py` 가 현재 `allow_origins=["*"]`(개발용). 프론트 오리진 화이트리스트로 좁힐 것
+- **CORS(API)**: `app/main.py` 가 현재 `allow_origins=["*"]`(개발용). 프론트 오리진 화이트리스트로 좁힐 것
   (env `ALLOWED_ORIGINS` 주입식 권장).
+- **GCS(파일 저장소)**: Storage 는 GCS(DB/Auth 만 Supabase). 버킷 생성·공개/비공개·**버킷 CORS**(브라우저 직접 PUT)·키리스 서명(런타임 SA self `iam.serviceAccountTokenCreator` + `iamcredentials` API)은 `docs/features/2026-06-15-supabase-storage-to-gcs/` Phase A 참고. `make deploy-api` 가 `GCS_*` env 주입(시크릿 불필요 — 런타임 SA ADC).
 - **이미지 가공 ↔ Cloud Run**: "요청 처리 중에만 CPU 할당" + 인스턴스 교체 →
   응답 후 백그라운드 스레드 가공은 죽을 수 있음. MVP는 요청 내 동기 처리(+timeout/memory 상향),
   대량이면 Cloud Tasks/Pub-Sub. 진행상태는 인메모리 금지 → DB `upload_job`.

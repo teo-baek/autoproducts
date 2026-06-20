@@ -340,7 +340,7 @@ def export_admin_products(
     if sb:
         uniq = list({it["_cell_path"] for it in items if it.get("_cell_path")})
         with ThreadPoolExecutor(max_workers=_EXPORT_IMG_WORKERS) as ex:
-            for path, data in zip(uniq, ex.map(lambda p: cell_image_bytes(sb, p), uniq)):
+            for path, data in zip(uniq, ex.map(lambda p: cell_image_bytes(p), uniq)):
                 img_map[path] = data
     render_rows = []
     for it in items:

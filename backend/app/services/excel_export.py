@@ -9,6 +9,8 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core import gcs
+from app.core.config import get_settings
 from app.services.image_process import process_image_bytes
 from app.services.qr import qr_target_url, generate_qr_png
 
@@ -145,8 +147,8 @@ def _cache_put(path: str, data: bytes) -> None:
             _CELL_CACHE.popitem(last=False)
 
 
-def cell_image_bytes(sb, storage_path: str | None, bucket: str = "product-images") -> bytes | None:
-    """Storage 이미지 다운로드 → 셀용 썸네일 JPEG. 없음/실패 시 None(빌더가 '사진 없음' 처리).
+def cell_image_bytes(storage_path: str | None, bucket: str | None = None) -> bytes | None:
+    """GCS 이미지 다운로드 → 셀용 썸네일 JPEG. 없음/실패 시 None(빌더가 '사진 없음' 처리).
 
     한 장씩만 메모리에 올렸다가 즉시 축소 → 원본 바이트는 곧 회수(대량 출력 OOM 방지).
     같은 경로는 TTL 캐시로 재다운로드를 건너뛴다(반복 export egress·지연↓).
@@ -157,7 +159,7 @@ def cell_image_bytes(sb, storage_path: str | None, bucket: str = "product-images
     if cached is not None:
         return cached
     try:
-        raw = sb.storage.from_(bucket).download(storage_path)
+        raw = gcs.download_bytes(bucket or get_settings().gcs_product_bucket, storage_path)
     except Exception:
         log.warning("엑셀 셀 이미지 다운로드 실패 path=%s", storage_path)
         return None

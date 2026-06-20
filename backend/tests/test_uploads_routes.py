@@ -181,3 +181,65 @@ def test_foreign_wholesaler_cannot_touch_others_job(monkeypatch):
                       json={"image_id": "img1", "source_p_number": "1001"}).status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+# ── /uploads/sign — 브라우저 직접 업로드용 V4 서명 PUT URL(GCS) ───────────────────
+def _fake_sign(monkeypatch):
+    # 실제 GCP 호출 없이 서명 URL 만 가짜로(핸들러 로직=스코프·검증만 테스트). public_url 은 config 문자열이라 그대로 사용.
+    monkeypatch.setattr(up_mod.gcs, "signed_put_url",
+                        lambda bucket, path, content_type, **kw: f"https://signed.example/{path}?X=1")
+
+
+def test_sign_happy_path_scopes_to_wholesaler(monkeypatch):
+    _fake_sign(monkeypatch)
+    app.dependency_overrides[get_current_user] = _wholesaler   # 승인된 도매 w1
+    try:
+        res = TestClient(app).post("/uploads/sign",
+                                   json={"object_key": "bulk/1.jpg", "content_type": "image/jpeg"})
+        assert res.status_code == 200
+        b = res.json()
+        assert b["storage_path"] == "w1/bulk/1.jpg"            # 도매 스코프 = 토큰 wid 가 prefix
+        assert b["content_type"] == "image/jpeg"
+        assert b["upload_url"].endswith("w1/bulk/1.jpg?X=1")
+        assert b["public_url"].endswith("/w1/bulk/1.jpg")      # GCS 공개 URL 형식
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_sign_prefix_forced_from_token_not_client(monkeypatch):
+    """클라가 다른 도매 prefix(w1/...)를 보내도 토큰 wid(w9) 밑으로만 스코프 → IDOR 차단."""
+    _fake_sign(monkeypatch)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id="u", role="wholesaler", status="approved", wholesaler_id="w9")
+    try:
+        res = TestClient(app).post("/uploads/sign",
+                                   json={"object_key": "w1/steal.jpg", "content_type": "image/jpeg"})
+        assert res.status_code == 200
+        assert res.json()["storage_path"] == "w9/w1/steal.jpg"  # 항상 호출자(w9) 밑 — 남의 칸 못 씀
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_sign_rejects_path_traversal_and_empty(monkeypatch):
+    _fake_sign(monkeypatch)
+    app.dependency_overrides[get_current_user] = _wholesaler
+    try:
+        c = TestClient(app)
+        assert c.post("/uploads/sign",
+                      json={"object_key": "../other/x.jpg", "content_type": "image/jpeg"}).status_code == 400
+        assert c.post("/uploads/sign",
+                      json={"object_key": "   ", "content_type": "image/jpeg"}).status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_sign_requires_wholesaler(monkeypatch):
+    _fake_sign(monkeypatch)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id="u", role="retail_seller", status="approved", seller_type="independent")
+    try:
+        res = TestClient(app).post("/uploads/sign",
+                                   json={"object_key": "x.jpg", "content_type": "image/jpeg"})
+        assert res.status_code == 403                          # 도매 전용 가드
+    finally:
+        app.dependency_overrides.clear()

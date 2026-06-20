@@ -24,7 +24,7 @@
 백엔드 API는 완료. 남은 건 **프론트 + 인프라**.
 
 ### 백엔드/인프라
-- [ ] **product-images Storage 버킷 생성**(비공개) + `storage.objects` RLS — 이미지 대량 업로드용. (프론트가 직접 업로드 → 백엔드는 경로 기록·매칭. *현재 매칭 API는 매니페스트만으로 동작하므로 실파일 업로드 화면이 붙을 때 필요*)
+- [x] ~~product-images Storage 버킷~~ → **Storage GCS 이전 완료**(2026-06-15). 버킷 `ezmerce-product-images`(공개)/`ezmerce-business-docs`(비공개) + 런타임 SA IAM(GCS엔 `storage.objects` RLS 개념 없음) + CORS + 키리스 V4 서명. 프론트는 `POST /uploads/sign` 으로 서명 URL 받아 GCS 직접 업로드. 상세: `docs/features/2026-06-15-supabase-storage-to-gcs/`
 - [ ] **CORS 화이트리스트** — `app/main.py` 현재 `allow_origins=["*"]`(개발용). 운영 도메인으로 좁히기.
 - [ ] **배포** — FastAPI 호스팅(서버/컨테이너) + `.env`(SUPABASE_URL/SERVICE_KEY/PUBLIC_BASE_URL) 주입. `PUBLIC_BASE_URL` = QR 카드 실도메인으로 설정.
 - [ ] **프론트 로그인 → JWT 흐름** — 프론트가 Supabase Auth 로그인 후 받은 JWT 를 백엔드 `Authorization: Bearer` 로 전달(백엔드는 JWKS 검증 완료). 

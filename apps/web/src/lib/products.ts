@@ -79,7 +79,10 @@ export type ProductCreatePayload = {
 };
 
 /* ── 상수 ───────────────────────────────────────────────────────────────── */
-export const PRODUCT_BUCKET = "product-images";
+// 공개 이미지 URL prefix(GCS). ⚠️ 백엔드 gcs_public_base_url 과 동일해야 함(불일치 시 엑셀 역파서 누락).
+const GCS_PUBLIC_BASE = (
+  process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE ?? "https://storage.googleapis.com/ezmerce-product-images"
+).replace(/\/+$/, "");
 export const CATEGORY_OPTIONS = [
   { value: "의류", label: "의류" },
   { value: "잡화", label: "잡화" },
@@ -121,6 +124,43 @@ export const SELLER_TYPE_LABEL: Record<string, string> = {
   independent: "라이브셀러",
   agency_affiliated: "에이전시 소속",
 };
+
+/* ── 고객관리 (소매↔도매 매칭 취소 + 가격노출) ───────────────────────────── */
+// 모델: 테넌트 안 모든 소매↔도매 '기본 연결', 관리자가 특정 쌍을 '취소'. 백엔드 /customers 셰이핑과 1:1.
+export type Customer = Account & {
+  tier: string | null; // 1차 화면 제외(2차 자동등급). 잠자는 필드
+  excluded_wholesaler_ids?: string[]; // admin 뷰: 이 소매가 '거래 취소'된 도매 id (없으면 전부 연결)
+};
+
+// 도매업체 목록(도매관리자 전용 — 도매 탭 + 매칭 취소 대상)
+export type ManagedWholesaler = {
+  id: string;
+  name: string;
+  biz_number: string | null;
+  created_at: string | null;
+  connected_count: number; // 연결된 소매 수(= 테넌트 전체 − 취소)
+};
+
+export const PRICE_VIS_LABEL: Record<string, string> = {
+  wholesale: "도매가",
+  retail: "판매가",
+  none: "미노출",
+};
+
+export const listCustomers = () => api<Customer[]>("/customers", { auth: true });
+export const listManagedWholesalers = () =>
+  api<ManagedWholesaler[]>("/customers/wholesalers", { auth: true });
+// 매칭 취소(연결 끊기) / 복원(다시 연결) — 도매관리자 전용
+export const disconnectCustomer = (uid: string, wholesaler_id: string) =>
+  api(`/customers/${uid}/disconnect`, { method: "POST", body: JSON.stringify({ wholesaler_id }), auth: true });
+export const reconnectCustomer = (uid: string, wholesaler_id: string) =>
+  api(`/customers/${uid}/reconnect`, { method: "POST", body: JSON.stringify({ wholesaler_id }), auth: true });
+export const setCustomerPriceVisibility = (uid: string, price_visibility: string) =>
+  api(`/customers/${uid}/price-visibility`, {
+    method: "POST",
+    body: JSON.stringify({ price_visibility }),
+    auth: true,
+  });
 
 /* ── 도매관리자(테넌트) — 소속 도매 합산 상품관리 (FR-5) ────────────────── */
 export type AdminSku = {
@@ -319,24 +359,33 @@ export const matchImage = (job_id: string, image_id: string, source_p_number: st
 
 export const listJobs = () => api<{ jobs: Job[] }>("/uploads/jobs", { auth: true });
 
-/* ── Storage (이미지 직접 업로드) ──────────────────────────────────────── */
+/* ── Storage (이미지 직접 업로드) — GCS signed PUT URL ──────────────────── */
 export async function uploadProductImage(
   file: File,
-  wholesalerId: string,
+  _wholesalerId: string, // 서버가 토큰에서 도매 스코프({wid}/)를 강제 — 인자는 호출부 호환 유지용(미사용)
   key: string
 ): Promise<{ storage_path: string; publicUrl: string }> {
-  // ⚠️ Supabase Storage 키는 ASCII 만 허용(한글/특수문자 → InvalidKey). 확장자도 ASCII 로 정리.
+  // object name 은 ASCII 로(GCS 안전). 확장자 정리.
   const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "jpg";
-  const storage_path = `${wholesalerId}/${key}.${ext}`;
-  const { error } = await supabase.storage
-    .from(PRODUCT_BUCKET)
-    .upload(storage_path, file, { upsert: true, contentType: file.type });
-  if (error) throw new Error(`이미지 업로드 실패: ${error.message}`);
-  return { storage_path, publicUrl: publicImageUrl(storage_path) };
+  const ctype = file.type || "application/octet-stream";
+  // 1) 백엔드에서 V4 signed PUT URL 발급(경로 prefix={wid}/ 는 서버가 토큰으로 강제 → IDOR 차단).
+  const signed = await api<{ upload_url: string; storage_path: string; public_url: string; content_type: string }>(
+    "/uploads/sign",
+    { method: "POST", body: JSON.stringify({ object_key: `${key}.${ext}`, content_type: ctype }), auth: true }
+  );
+  // 2) 브라우저가 GCS 로 직접 PUT(서명한 content_type 과 동일 헤더 필수 — CORS 는 버킷에 설정됨).
+  const res = await fetch(signed.upload_url, {
+    method: "PUT",
+    headers: { "Content-Type": signed.content_type },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`이미지 업로드 실패 (${res.status})`);
+  return { storage_path: signed.storage_path, publicUrl: signed.public_url };
 }
 
+/** 공개 이미지 URL — GCS 공개 버킷. 백엔드 public_image_url 과 동일 형식(`{GCS_PUBLIC_BASE}/{path}`). */
 export function publicImageUrl(storagePath: string): string {
-  return supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+  return `${GCS_PUBLIC_BASE}/${storagePath.replace(/^\/+/, "")}`;
 }
 
 /** 상품 대표 이미지 URL 해석 — representative_image_url(완전URL) 우선, 없으면 첫 이미지 storage_path. */

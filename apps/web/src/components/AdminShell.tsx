@@ -5,12 +5,13 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutDialog } from "./LogoutDialog";
-import { Box, LogOut, Settings, Users } from "./icons";
+import { Box, LogOut, Users } from "./icons";
 
 type NavItem = { href: string; label: string; icon: typeof Users };
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "가입 승인", icon: Users },
+  { href: "/admin/customers", label: "고객 관리", icon: Users },
   { href: "/admin/products", label: "상품 관리", icon: Box },
 ];
 
@@ -65,16 +66,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <div
-            title="준비 중"
-            className="flex cursor-default items-center gap-3 rounded-[var(--radius)] px-3.5 py-3 text-sm font-medium text-white/30"
-          >
-            <Settings width={18} height={18} />
-            가격·권한 설정
-            <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-white/25">
-              soon
-            </span>
-          </div>
         </nav>
 
         <div className="border-t border-white/10 px-3 py-4">

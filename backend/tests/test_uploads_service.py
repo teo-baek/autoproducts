@@ -254,10 +254,10 @@ class FakeStorageRepo(FakeUploadRepo):
     def put(self, path, data):
         self.store[path] = data
 
-    def download_object(self, path, bucket="product-images"):
+    def download_object(self, path, bucket=None):
         return self.store[path]               # 없으면 KeyError → 서비스가 'none' 처리
 
-    def upload_object(self, path, data, bucket="product-images", content_type="image/jpeg"):
+    def upload_object(self, path, data, bucket=None, content_type="image/jpeg"):
         self.store[path] = data
         return path
 

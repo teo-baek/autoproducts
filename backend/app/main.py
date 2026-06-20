@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routers import admin, auth, catalog, products, public, uploads
+from app.routers import admin, auth, catalog, customers, products, public, uploads
 
 app = FastAPI(title="ezmerce API", version="0.2.0")
 
@@ -30,6 +30,7 @@ app.include_router(admin.router)
 app.include_router(products.router)
 app.include_router(public.router)
 app.include_router(catalog.router)
+app.include_router(customers.router)
 app.include_router(uploads.router)
 
 

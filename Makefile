@@ -64,6 +64,10 @@ GCP_REPO        := $(strip $(GCP_REPO))
 SUPABASE_URL    := $(strip $(SUPABASE_URL))
 PUBLIC_BASE_URL := $(strip $(PUBLIC_BASE_URL))
 WEB_API_BASE_URL := $(strip $(WEB_API_BASE_URL))
+GCS_PRODUCT_BUCKET := $(strip $(GCS_PRODUCT_BUCKET))
+GCS_DOC_BUCKET     := $(strip $(GCS_DOC_BUCKET))
+GCS_PUBLIC_BASE    := $(strip $(GCS_PUBLIC_BASE))
+GCS_SIGNING_SA     := $(strip $(GCS_SIGNING_SA))
 
 GCLOUD  := CLOUDSDK_CONFIG=$(CURDIR)/.gcloud-ezmerce gcloud
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo manual)
@@ -123,7 +127,7 @@ deploy-api: deploy-auth ## 백엔드만: 빌드(Cloud Build) → Cloud Run 배�
 	  --platform=managed --allow-unauthenticated --port=8080 \
 	  --cpu=1 --memory=1Gi --concurrency=40 --timeout=300 \
 	  --min-instances=0 --max-instances=4 \
-	  --set-env-vars=SUPABASE_URL=$(SUPABASE_URL),PUBLIC_BASE_URL=$(PUBLIC_BASE_URL),PLATFORM_CODE_PREFIX=EZM \
+	  --set-env-vars=SUPABASE_URL=$(SUPABASE_URL),PUBLIC_BASE_URL=$(PUBLIC_BASE_URL),PLATFORM_CODE_PREFIX=EZM,GCS_PROJECT=$(GCP_PROJECT),GCS_PRODUCT_BUCKET=$(GCS_PRODUCT_BUCKET),GCS_DOC_BUCKET=$(GCS_DOC_BUCKET),GCS_PUBLIC_BASE=$(GCS_PUBLIC_BASE),GCS_SIGNING_SA=$(GCS_SIGNING_SA) \
 	  --set-secrets=SUPABASE_SERVICE_KEY=ezmerce-supabase-service-key:latest
 	@echo "✓ 배포 완료 — URL: $$($(GCLOUD) run services describe $(GCP_SERVICE) --region=$(GCP_REGION) --project=$(GCP_PROJECT) --format='value(status.url)' 2>/dev/null)"
 

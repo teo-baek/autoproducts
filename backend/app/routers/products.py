@@ -182,8 +182,6 @@ def export_products(
     rows, _ = SupabaseProductRepo(owner_wid=user.wholesaler_id).list_products(
         limit=1000, offset=0, category=category, search=search, status=status)
     items = [shape_owner_product(r, user.wholesaler_id) for r in rows]
-    # 이미지가 하나라도 있을 때만 Storage 클라이언트 사용(없으면 다운로드 시도 자체를 안 함)
-    sb = get_supabase() if any(it.get("images") for it in items) else None
     render_rows = []
     for it in items:
         imgs = it.get("images") or []
@@ -195,7 +193,7 @@ def export_products(
             "item_name": it["item_name"],
             "fabric_composition": it.get("fabric_composition"),
             "platform_code": it["platform_code"],
-            "image_bytes": cell_image_bytes(sb, storage_path) if storage_path else None,
+            "image_bytes": cell_image_bytes(storage_path) if storage_path else None,
             "skus": [{"color": s.get("color"), "size": s.get("size"), "stock": s.get("stock"),
                       "wholesale_price": s.get("wholesale_price"),
                       "retail_price": s.get("retail_price")} for s in it["skus"]],

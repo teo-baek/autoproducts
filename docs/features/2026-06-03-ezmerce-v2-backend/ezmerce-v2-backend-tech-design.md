@@ -3,6 +3,7 @@
 > **상위 문서**: [ezmerce-v2-backend-requirements.md](./ezmerce-v2-backend-requirements.md) (승인됨, CH-20260603-001)
 > **다음 단계**: `writing-plans` (`/write-plan`) — 본 설계를 단계별 TDD 구현계획서로 분해.
 > **본 문서 범위**: 백엔드 아키텍처 + **DB 스키마(데이터 모델)가 핵심 산출물** + API 윤곽 + 핵심 결정/대안 + 위험 + 테스트 전략.
+> **⚠️ 갱신(2026-06-15)**: 본 문서의 **Supabase Storage**(`product-images`, 및 코드에 미구현인 설계상 `excel-uploads`) 기술은 **GCS 로 이전**됨 — DB/Auth 만 Supabase 유지. 파일 저장소 현재 설계는 [supabase-storage-to-gcs](../2026-06-15-supabase-storage-to-gcs/supabase-storage-to-gcs-implementation-plan.md) 참조.
 
 ---
 

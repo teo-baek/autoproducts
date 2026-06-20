@@ -77,6 +77,5 @@ COMMIT;
 
 -- ── §2. (선택) Storage 파일 정리 ────────────────────────────────────────────────
 -- 위 §1 은 DB 의 이미지 "기록"만 지운다. 실제 업로드된 사진/서류 파일은 버킷에 남는다.
--- 완전 비우려면 대시보드 Storage 에서 product-images / business-docs 버킷을 "Empty bucket" 하거나,
--- 아래를 실행(객체 레코드 삭제):
--- DELETE FROM storage.objects WHERE bucket_id IN ('product-images', 'business-docs');
+-- 파일은 GCS 버킷에 있음(Supabase Storage 아님). 완전 비우려면 gsutil 로:
+--   gsutil -m rm -r gs://ezmerce-product-images/** gs://ezmerce-business-docs/**

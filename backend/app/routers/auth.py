@@ -2,15 +2,16 @@ import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from app.core import gcs
 from app.core.auth import get_current_user
+from app.core.config import get_settings
 from app.core.supabase import get_supabase
 from app.schemas.auth import CurrentUser, RegisterRequest, RegisterResponse
 from app.services.accounts import RegisterError, register_account
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# 서류 업로드 정책 — 사업자등록증/신분증(민감 PII). 비공개 버킷, 백엔드 경유(service key)만.
-_DOC_BUCKET = "business-docs"
+# 서류 업로드 정책 — 사업자등록증/신분증(민감 PII). GCS 비공개 버킷(gcs_doc_bucket), 백엔드 경유(서비스계정)만.
 _ALLOWED_DOC_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 _MAX_DOC_BYTES = 5 * 1024 * 1024  # 5MB (디자인 스펙)
 _DOC_FIELDS = {"business_cert": "business_cert_path", "id_doc": "id_doc_path"}
@@ -36,14 +37,11 @@ class SupabaseAuthRepo:
         return self.sb.table("profiles").insert(d).execute().data[0]
 
     def upload_document(self, user_id: str, kind: str, filename: str, content: bytes, content_type: str) -> str:
-        # 비공개 버킷에 service key 로 저장. 경로는 본인 uid 폴더로 스코프.
+        # GCS 비공개 버킷에 서비스계정으로 저장. 경로는 본인 uid 폴더로 스코프.
         ext = os.path.splitext(filename or "")[1].lower()
         path = f"{user_id}/{kind}{ext}"
-        self.sb.storage.from_(_DOC_BUCKET).upload(
-            path,
-            content,
-            {"content-type": content_type or "application/octet-stream", "upsert": "true"},
-        )
+        gcs.upload_bytes(get_settings().gcs_doc_bucket, path, content,
+                         content_type or "application/octet-stream")
         return path
 
     def set_document_paths(self, user_id: str, paths: dict) -> dict:

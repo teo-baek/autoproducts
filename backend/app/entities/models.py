@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.entities.enums import (
     AccountStatus,
+    CustomerTier,
     ImageMatch,
     PriceVisibility,
     ProductStatus,
@@ -75,6 +76,20 @@ class ManagerWholesaler(_Entity):
     deleted_at: datetime | None = None
 
 
+class WholesalerCustomerExclusion(_Entity):
+    """소매↔도매 매칭 '취소(예외)' 표. 살아있는 행 = 이 소매는 이 도매와 거래 안 함.
+    기본은 테넌트 안 전부 연결 → 빈 표 = 모두 연결. 취소한 쌍만 행으로 남는다.
+    도매가 보는 고객 = 테넌트 소매 − (그 도매에 대해 취소된 소매)."""
+    id: str
+    wholesaler_id: str
+    customer_id: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    deleted_at: datetime | None = None
+
+
 class Profile(_Entity):
     id: str
     role: UserRole
@@ -86,6 +101,7 @@ class Profile(_Entity):
     manager_id: str | None = None         # 도매관리자(테넌트) 연계 — 셀러 연계 / admin 자기 테넌트
     seller_type: SellerType | None = None
     price_visibility: PriceVisibility | None = None
+    tier: CustomerTier | None = None      # 소매 등급(수동) — null=신규. 도매 공유(소매당 1개)
     approved_at: datetime | None = None
     approved_by: str | None = None        # 승인한 관리자
     created_at: datetime | None = None
